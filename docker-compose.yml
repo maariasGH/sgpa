@@ -1,0 +1,207 @@
+services:
+
+  # ── BASE DE DATOS ─────────────────────────────────────────────
+  db:
+    image: postgres:16
+    container_name: sgpa_db
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: sgpa
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./bd:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d sgpa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FRONTEND ─────────────────────────────────────────────────
+  front-end:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_frontend
+    volumes:
+      - ./front-end:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+
+  # ── API GATEWAY ───────────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_gateway
+    volumes:
+      - ./gateway:/app
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - MS_DISTRITOS_URL=http://ms-distritos:3001
+      - MS_SALAS_URL=http://ms-salas:3002
+      - MS_AUTORIDADES_URL=http://ms-autoridades:3003
+      - MS_USUARIOS_URL=http://ms-usuarios:3004
+      - MS_AUDIENCIAS_URL=http://ms-audiencias:3005
+      - MS_AUDITORIA_URL=http://ms-auditoria:3006
+      - JWT_SECRET=sgpa_secret_cambiar_en_produccion
+      - JWT_EXPIRES_IN=5m
+      - PORT=3000
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS DISTRITOS ─────────────────────────────────────────────
+  ms-distritos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_distritos
+    volumes:
+      - ./ms-distritos:/app
+    ports:
+      - "3001:3001"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_distritos
+      - PORT=3001
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS SALAS ─────────────────────────────────────────────────
+  ms-salas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_salas
+    volumes:
+      - ./ms-salas:/app
+    ports:
+      - "3002:3002"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_salas
+      - MS_DISTRITOS_URL=http://ms-distritos:3001
+      - PORT=3002
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS AUTORIDADES ───────────────────────────────────────────
+  ms-autoridades:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_autoridades
+    volumes:
+      - ./ms-autoridades:/app
+    ports:
+      - "3003:3003"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_autoridades
+      - MS_DISTRITOS_URL=http://ms-distritos:3001
+      - PORT=3003
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS USUARIOS ──────────────────────────────────────────────
+  ms-usuarios:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_usuarios
+    volumes:
+      - ./ms-usuarios:/app
+    ports:
+      - "3004:3004"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_usuarios
+      - MS_DISTRITOS_URL=http://ms-distritos:3001
+      - JWT_SECRET=sgpa_secret_cambiar_en_produccion
+      - JWT_EXPIRES_IN=5m
+      - PORT=3004
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS AUDIENCIAS ─────────────────────────────────────────────
+  ms-audiencias:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_audiencias
+    volumes:
+      - ./ms-audiencias:/app
+    ports:
+      - "3005:3005"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_audiencias
+      - MS_SALAS_URL=http://ms-salas:3002
+      - MS_AUTORIDADES_URL=http://ms-autoridades:3003
+      - MS_USUARIOS_URL=http://ms-usuarios:3004
+      - PORT=3005
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── MS AUDITORIA ──────────────────────────────────────────────
+  ms-auditoria:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgpa_ms_auditoria
+    volumes:
+      - ./ms-auditoria:/app
+    ports:
+      - "3006:3006"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=sgpa
+      - DB_SCHEMA=sgpa_auditoria
+      - PORT=3006
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      db:
+        condition: service_healthy
