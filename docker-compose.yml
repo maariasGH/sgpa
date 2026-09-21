@@ -5,15 +5,15 @@ services:
     image: postgres:16
     container_name: sgpa_db
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: sgpa
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5434:5432"
     volumes:
       - ./bd:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U root -d sgpa"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -43,16 +43,16 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - MS_DISTRITOS_URL=http://ms-distritos:3001
       - MS_SALAS_URL=http://ms-salas:3002
       - MS_AUTORIDADES_URL=http://ms-autoridades:3003
       - MS_USUARIOS_URL=http://ms-usuarios:3004
       - MS_AUDIENCIAS_URL=http://ms-audiencias:3005
       - MS_AUDITORIA_URL=http://ms-auditoria:3006
-      - JWT_SECRET=sgpa_secret_cambiar_en_produccion
+      - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3000
     command: sh -c "npm install && npm run dev"
@@ -73,9 +73,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_distritos
       - PORT=3001
     command: sh -c "npm install && npm run dev"
@@ -96,9 +96,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_salas
       - MS_DISTRITOS_URL=http://ms-distritos:3001
       - PORT=3002
@@ -120,9 +120,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_autoridades
       - MS_DISTRITOS_URL=http://ms-distritos:3001
       - PORT=3003
@@ -144,12 +144,12 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_usuarios
       - MS_DISTRITOS_URL=http://ms-distritos:3001
-      - JWT_SECRET=sgpa_secret_cambiar_en_produccion
+      - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3004
     command: sh -c "npm install && npm run dev"
@@ -170,9 +170,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_audiencias
       - MS_SALAS_URL=http://ms-salas:3002
       - MS_AUTORIDADES_URL=http://ms-autoridades:3003
@@ -196,9 +196,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=sgpa
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_auditoria
       - PORT=3006
     command: sh -c "npm install && npm run dev"
