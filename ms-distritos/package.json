@@ -1,7 +1,7 @@
 {
   "name": "ms-distritos",
   "version": "1.0.0",
-  "description": "",
+  "description": "Microservicio de distritos del SGPA",
   "main": "index.js",
   "scripts": {
     "dev": "node --watch index.js",
