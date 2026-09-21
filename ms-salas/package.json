@@ -1,7 +1,7 @@
 {
   "name": "ms-salas",
   "version": "1.0.0",
-  "description": "",
+  "description": "Microservicio de salas del SGPA",
   "main": "index.js",
   "scripts": {
     "dev": "node --watch index.js",
@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1",
+    "node-fetch": "^2.7.0",
     "pg": "^8.23.0",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.8"
