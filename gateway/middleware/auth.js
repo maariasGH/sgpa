@@ -30,6 +30,34 @@ const verificarToken = async (req, res, next) => {
     return res.status(401).json({ error: 'Token no proporcionado' });
   }
 
+  // ── Debug token (solo en desarrollo) ─────────────────────────
+  // Seteá DEBUG_TOKEN en el .env para saltear la verificación real
+  // Ejemplo: DEBUG_TOKEN=debug123
+  const DEBUG_TOKEN = process.env.DEBUG_TOKEN;
+  if (DEBUG_TOKEN && token === DEBUG_TOKEN) {
+    req.usuario = {
+      id_usuario:  0,
+      username:    'debug',
+      rol:         'ADMINISTRADOR',  // debug siempre es admin
+      id_distrito: null,
+    };
+    console.warn('⚠️  Usando DEBUG_TOKEN — no usar en producción');
+    return next();
+  }
+
+  // ── Debug token de Operador (solo en desarrollo) ─────────────────────────
+  const DEBUG_TOKEN_OP = process.env.DEBUG_TOKEN_OP;
+  if (DEBUG_TOKEN_OP && token === DEBUG_TOKEN_OP) {
+    req.usuario = {
+      id_usuario:  0,
+      username:    'debug_op',
+      rol:         'OPERADOR',  // debug_op siempre es operador
+      id_distrito: 2,           // 1 = Santa Fe, 2 = Rosario
+    };
+    console.warn('⚠️  Usando DEBUG_TOKEN_OP — no usar en producción');
+    return next();
+  }
+
   try {
     // Le pregunta al ms-usuarios si el token es válido
     const resp = await fetch(`${MS_USUARIOS_URL}/auth/verificar`, {

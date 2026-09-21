@@ -55,6 +55,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3000
+      - DEBUG_TOKEN=${DEBUG_TOKEN}
+      - DEBUG_TOKEN_OP=${DEBUG_TOKEN_OP}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
