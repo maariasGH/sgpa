@@ -29,6 +29,9 @@ services:
       - ./front-end:/app
     ports:
       - "5173:5173"
+    environment:
+      # URL del gateway vista desde el navegador (no desde el contenedor)
+      - VITE_API_URL=http://localhost:3000
     command: sh -c "npm install && npm run dev -- --host"
 
   # ── API GATEWAY ───────────────────────────────────────────────
