@@ -35,12 +35,12 @@ CREATE INDEX idx_usuario_rol      ON USUARIO(id_rol);
 CREATE INDEX idx_usuario_distrito ON USUARIO(id_distrito);
 
 -- Seed: usuario administrador inicial
--- Contraseña por defecto: "admin1234" (bcrypt hash de ejemplo)
+-- Contraseña por defecto: "admin1234" (bcrypt, 12 rondas)
 -- IMPORTANTE: cambiar en el primer login
 INSERT INTO USUARIO (username, password_hash, nombre, dni, email, id_rol, id_distrito)
 VALUES (
     'admin',
-    '$2b$12$KIXuZq.placeholder.hash.cambiar.en.produccion',
+    '$2b$12$NplcKStVhgOLlLFB6F1Q/Owpk42gn3B8j1USOq6risC62ZMoV4twW',
     'Administrador del Sistema',
     99999999,
     'admin@sgpa.pjsf.gob.ar',

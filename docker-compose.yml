@@ -12,6 +12,7 @@ services:
       - "5434:5432"
     volumes:
       - ./bd:/docker-entrypoint-initdb.d
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -57,6 +58,7 @@ services:
       - PORT=3000
       - DEBUG_TOKEN=${DEBUG_TOKEN}
       - DEBUG_TOKEN_OP=${DEBUG_TOKEN_OP}
+      - CORS_ORIGIN=http://localhost:5173
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
@@ -127,6 +129,12 @@ services:
       - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_autoridades
       - MS_DISTRITOS_URL=http://ms-distritos:3001
+      - MS_AUDIENCIAS_URL=http://ms-audiencias:3005
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
       - PORT=3003
     command: sh -c "npm install && npm run dev"
     depends_on:
@@ -207,3 +215,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+# ── VOLÚMENES ────────────────────────────────────────────────
+# Datos persistentes de PostgreSQL. Los scripts de bd/ solo corren si está vacío:
+# para re-inicializar la base: docker compose down -v
+volumes:
+  pgdata:

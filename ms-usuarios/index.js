@@ -1,6 +1,7 @@
 const express = require('express');
 const { sequelize } = require('./models');
 const authRoutes = require('./routes/auth');
+const usuariosRoutes = require('./routes/usuarios');
 
 const app  = express();
 const PORT = process.env.PORT || 3004;
@@ -9,6 +10,7 @@ app.use(express.json());
 
 // ── Rutas ─────────────────────────────────────────────────────
 app.use('/auth', authRoutes);
+app.use('/usuarios', usuariosRoutes);
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/health', async (req, res) => {

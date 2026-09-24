@@ -2,18 +2,19 @@ const fetch = require('node-fetch');
 
 const MS_USUARIOS_URL = process.env.MS_USUARIOS_URL || 'http://localhost:3004';
 
-// Rutas que NO requieren autenticación
+// Rutas que NO requieren autenticación (paths relativos a /api).
+// Se comparan con regex exactas: con startsWith, GET /audiencias/stats quedaba público.
 const RUTAS_PUBLICAS = [
-  { method: 'POST', path: '/auth/login' },
-  { method: 'GET',  path: '/health' },
-  { method: 'GET',  path: '/health/all' },
-  { method: 'GET',  path: '/audiencias' },      // vista pública del calendario
-  { method: 'GET',  path: '/audiencias/tv' },   // vista televisor
+  { method: 'POST', path: /^\/auth\/login\/?$/ },
+  { method: 'GET',  path: /^\/audiencias\/?$/ },          // vista pública del calendario
+  { method: 'GET',  path: /^\/audiencias\/tv\/?$/ },      // vista televisor
+  { method: 'GET',  path: /^\/audiencias\/\d+\/?$/ },     // detalle de una audiencia
+  { method: 'GET',  path: /^\/distritos(\/\d+)?\/?$/ },   // desplegables
 ];
 
 const esRutaPublica = (method, path) => {
   return RUTAS_PUBLICAS.some(ruta =>
-    ruta.method === method && path.startsWith(ruta.path)
+    ruta.method === method && ruta.path.test(path)
   );
 };
 

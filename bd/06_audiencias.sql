@@ -24,7 +24,7 @@ INSERT INTO ESTADO_AUDIENCIA (nombre) VALUES
 -- ── Entidad central: AUDIENCIA ────────────────────────────────
 CREATE TABLE IF NOT EXISTS AUDIENCIA (
     id_audiencia     SERIAL        PRIMARY KEY,
-    cuij             INT   NOT NULL,
+    cuij             VARCHAR(20)   NOT NULL,   -- formato XX-XXXXXXXX-X
     caratula         TEXT          NOT NULL,
     tipo_audiencia   VARCHAR(100)  NOT NULL,
 
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS AUDIENCIA (
 
     fecha            DATE          NOT NULL,
     hora_inicio      TIME          NOT NULL,
-    hora_fin         TIME,
+    hora_fin         TIME          NOT NULL,
 
     -- FK real dentro del mismo schema
     id_estado        INT           NOT NULL REFERENCES ESTADO_AUDIENCIA(id_estado),
@@ -49,12 +49,15 @@ CREATE TABLE IF NOT EXISTS AUDIENCIA (
     updated_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
 
     -- Restricciones de integridad del negocio
-    -- No puede haber dos audiencias en la misma sala al mismo horario
-    UNIQUE (id_sala, fecha, hora_inicio),
-    -- Un juez no puede presidir dos audiencias al mismo horario
-    UNIQUE (id_juez, fecha, hora_inicio),
-    -- Un fiscal no puede intervenir en dos audiencias al mismo horario
-    UNIQUE (id_fiscal, fecha, hora_inicio)
+    CONSTRAINT chk_cuij_formato  CHECK (cuij ~ '^[0-9]{2}-[0-9]{8}-[0-9]$'),
+    CONSTRAINT chk_hora_inicio   CHECK (hora_inicio BETWEEN '07:00' AND '19:00'),
+    CONSTRAINT chk_hora_fin_max  CHECK (hora_fin <= '19:00'),
+    CONSTRAINT chk_hora_fin_orden CHECK (hora_fin > hora_inicio)
+
+    -- La superposición de sala / juez / fiscal NO se controla con UNIQUE:
+    -- se comparan intervalos completos (inicio1 < fin2 AND inicio2 < fin1)
+    -- y las audiencias CANCELADAS/SUSPENDIDAS no participan. Lo valida
+    -- ms-audiencias dentro de una transacción con lock por fecha.
 );
 
 CREATE INDEX idx_audiencia_fecha    ON AUDIENCIA(fecha);

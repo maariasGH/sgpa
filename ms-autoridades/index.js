@@ -1,41 +1,16 @@
-const express = require('express');
-const { Sequelize } = require('sequelize');
+const app = require('./app');
+const { sequelize } = require('./models');
 
-const app = express();
-app.use(express.json());
-
-// ── Configuración desde variables de entorno ─────────────────
-const PORT    = process.env.PORT    || 3003;
-const SCHEMA  = process.env.DB_SCHEMA || 'sgpa_autoridades';
-
-const sequelize = new Sequelize({
-  dialect:  'postgres',
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     process.env.DB_PORT     || 5434,
-  username: process.env.DB_USER     || 'root',
-  password: process.env.DB_PASSWORD || 'password',
-  database: process.env.DB_NAME     || 'sgpa',
-  schema:   SCHEMA,
-  logging:  false,
-});
-
-// ── Health check ─────────────────────────────────────────────
-app.get('/health', async (req, res) => {
-  try {
-    await sequelize.authenticate();
-    res.json({ status: 'ok', service: 'ms-autoridades', schema: SCHEMA });
-  } catch (err) {
-    res.status(503).json({ status: 'error', message: err.message });
-  }
-});
+const PORT = process.env.PORT || 3003;
 
 // ── Arranque ─────────────────────────────────────────────────
 app.listen(PORT, async () => {
   try {
     await sequelize.authenticate();
     console.log(`✅ ms-autoridades corriendo en puerto ${PORT}`);
-    console.log(`✅ Conectado a PostgreSQL — schema: ${SCHEMA}`);
+    console.log(`✅ Conectado a PostgreSQL — schema: sgpa_autoridades`);
   } catch (err) {
     console.error('❌ Error conectando a la DB:', err.message);
+    process.exit(1);
   }
 });
