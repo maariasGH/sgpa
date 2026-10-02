@@ -193,8 +193,12 @@ router.put('/:id', async (req, res) => {
       cambios.password_hash = await bcrypt.hash(String(cambios.password), BCRYPT_ROUNDS);
       delete cambios.password;
     }
-    if (cambios.dni !== undefined) cambios.dni = parseInt(cambios.dni);
-
+    if (cambios.dni !== undefined) {
+      if (cambios.dni.toString().length > 8) {
+        return res.status(400).json({ error: 'El dni no debe superar los 8 dígitos', code: 'DATOS_INVALIDOS' });
+      }
+      cambios.dni = parseInt(cambios.dni);
+    }
     await usuario.update(cambios);
     res.json({ data: serializar(usuario), message: 'Operador actualizado' });
   } catch (err) {

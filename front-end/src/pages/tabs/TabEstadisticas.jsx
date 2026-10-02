@@ -160,34 +160,59 @@ export default function TabEstadisticas({ usuario, esAdmin, distritos, nombreDis
 
   return (
     <div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"center",marginBottom:16}}>
-        <h2 style={{margin:0,fontSize:18,color:C.navy,fontWeight:800,flex:1}}><span aria-hidden="true">📊</span> Estadísticas — {personalizado ? `${fmtFecha(manual.desde)} al ${fmtFecha(manual.hasta)}` : RANGOS[rango]}</h2>
-        <div className="filtros" style={{gap:8}}>
-          {esAdmin && (
-            <FiltroSelect etiqueta="Distrito" value={filtDist} onChange={setFiltDist} destacado>
-              <option value="">Todos los distritos</option>
-              {distritos.map(d => <option key={d.id_distrito} value={d.id_distrito}>{d.nombre}</option>)}
-            </FiltroSelect>
-          )}
-          <div role="group" aria-label="Período" className="filtro-ancho nav-scroll" style={{display:"flex",gap:2,background:"#EDF2F7",borderRadius:7,padding:2}}>
-            {Object.entries(RANGOS).map(([r, label]) => (
-              <button key={r} type="button" aria-pressed={rango===r} onClick={()=>setRango(r)} style={{
-                padding:"6px 12px",border:"none",borderRadius:5,fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flex:"1 0 auto",
-                background:rango===r?C.navy:"transparent",color:rango===r?C.white:C.muted,
-              }}>{label}</button>
-            ))}
-          </div>
-          {personalizado && <>
-            <label style={{ fontSize:12, color:C.muted }}>Desde <input type="date" value={manual.desde} max={manual.hasta || undefined}
-              onChange={e=>setManual(m => ({ ...m, desde: e.target.value }))} style={inputFecha} /></label>
-            <label style={{ fontSize:12, color:C.muted }}>Hasta <input type="date" value={manual.hasta} min={manual.desde || undefined}
-              onChange={e=>setManual(m => ({ ...m, hasta: e.target.value }))} style={inputFecha} /></label>
-          </>}
-          <Btn variant="success" size="sm" onClick={exportarExcel} disabled={exportando || total === 0 || !periodoValido} style={{ flex:"1 0 auto" }}>
-            {exportando ? "Generando…" : "⬇ Exportar Excel"}
-          </Btn>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <h2 style={{ margin: 0, fontSize: 18, color: C.navy, fontWeight: 800, flex: "1 1 auto" }}>
+        <span aria-hidden="true">📊</span> Estadísticas — {personalizado ? `${fmtFecha(manual.desde)} al ${fmtFecha(manual.hasta)}` : RANGOS[rango]}
+      </h2>
+      
+      <div className="filtros" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, maxWidth: "100%" }}>
+        {esAdmin && (
+          <FiltroSelect etiqueta="Distrito" value={filtDist} onChange={setFiltDist} destacado>
+            <option value="">Todos los distritos</option>
+            {distritos.map(d => <option key={d.id_distrito} value={d.id_distrito}>{d.nombre}</option>)}
+          </FiltroSelect>
+        )}
+        
+        <div 
+          role="group" 
+          aria-label="Período" 
+          className="filtro-ancho nav-scroll" 
+          style={{ display: "flex", gap: 2, background: "#EDF2F7", borderRadius: 7, padding: 2, overflowX: "auto", maxWidth: "100%" }}
+        >
+          {Object.entries(RANGOS).map(([r, label]) => (
+            <button 
+              key={r} 
+              type="button" 
+              aria-pressed={rango === r} 
+              onClick={() => setRango(r)} 
+              style={{
+                padding: "6px 12px", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flex: "0 0 auto",
+                background: rango === r ? C.navy : "transparent", color: rango === r ? C.white : C.muted,
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+
+        {personalizado && (
+          <>
+            <label style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              Desde <input type="date" value={manual.desde} max={manual.hasta || undefined} onChange={e => setManual(m => ({ ...m, desde: e.target.value }))} style={inputFecha} />
+            </label>
+            <label style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              Hasta <input type="date" value={manual.hasta} min={manual.desde || undefined} onChange={e => setManual(m => ({ ...m, hasta: e.target.value }))} style={inputFecha} />
+            </label>
+          </>
+        )}
+
+        <Btn variant="success" size="sm" onClick={exportarExcel} disabled={exportando || total === 0 || !periodoValido} style={{ flex: "0 0 auto" }}>
+          {exportando ? "Generando…" : "⬇ Exportar Excel"}
+        </Btn>
       </div>
+    </div>
+
+    {/* Resto del componente sin cambios ... */}
 
       {errorPeriodo && <Alert type="error">{errorPeriodo}</Alert>}
       {(error || errorExport) && <Alert type="error">{errorExport || mensajeError(error)}</Alert>}
