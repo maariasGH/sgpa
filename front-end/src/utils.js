@@ -52,3 +52,10 @@ export const abrevSala = (nombre) => {
   }
   return sinPrefijo.length <= 6 ? sinPrefijo : sinPrefijo.slice(0, 6);
 };
+
+// true si `valor` es una fecha YYYY-MM-DD existente (rechaza 2026-02-30)
+export const esFechaValida = (valor) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor ?? "")) return false;
+  const d = new Date(`${valor}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === valor;
+};

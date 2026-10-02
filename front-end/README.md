@@ -1,16 +1,47 @@
-# React + Vite
+# SGPA — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interfaz web del Sistema de Gestión y Publicación de Audiencias (Poder Judicial de Santa Fe).
+React 19 + Vite + React Router. Habla solo con el API Gateway.
 
-Currently, two official plugins are available:
+## Comandos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm run dev      # servidor de desarrollo (http://localhost:5173)
+npm test         # tests (Jest + Testing Library)
+npm run lint     # ESLint
+npm run build    # build de producción en dist/
+```
 
-## React Compiler
+Con Docker no hace falta nada de esto: `docker compose up` desde la raíz levanta el frontend junto al resto.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Pantallas y rutas
 
-## Expanding the ESLint configuration
+| Ruta | Pantalla | Acceso |
+|------|----------|--------|
+| `/` | Calendario público. Fecha y filtros van en la URL (`/?fecha=2026-09-25&id_distrito=1`) | Público |
+| `/login` | Acceso interno | Público |
+| `/panel/audiencias` | Gestión de audiencias | Operador, Admin |
+| `/panel/autoridades` | Gestión de autoridades | Operador, Admin |
+| `/panel/estadisticas` | Estadísticas y exportación a Excel | Operador, Admin |
+| `/panel/operadores` | Usuarios operadores | Admin |
+| `/panel/auditoria` | Log de auditoría | Admin |
+| `/panel/tv` | Vista TV (pantalla completa) | Operador, Admin |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+El JWT vive solo en memoria: **recargar la página cierra la sesión**. Al volver a iniciar sesión se vuelve a la ruta en la que se estaba.
+
+## Configuración
+
+- `VITE_API_URL`: URL del gateway. Si está vacía se usa el mismo host que abrió la página en el puerto 3000, así funciona tanto en la PC como desde un teléfono en la red local.
+- Para abrirlo desde un teléfono, agregar `http://<IP-de-la-PC>:5173` a `CORS_ORIGIN` en el `.env` de la raíz.
+
+## Organización
+
+- `src/api/` — `client.js` (fetch, token, errores) y `sgpa.js` (un método por endpoint).
+- `src/components/ui.jsx` — componentes base (inputs con label asociado, `Modal` accesible, paginador…).
+- `src/hooks/` — `useCarga` (carga con cancelación de respuestas viejas), `useEsMovil`, `useDialogo`, `useDebounce`.
+- `src/validaciones.js` — validaciones de formularios (el backend vuelve a validar todo).
+- Estilos: inline con los tokens de `theme.js`; media queries y estados `:hover`/`:focus-visible` en `index.css`.
+
+## Producción
+
+`npm run build` genera archivos estáticos en `dist/`. El servidor web que los sirva tiene que devolver `index.html` para cualquier ruta (fallback de SPA). Si no, recargar en `/panel/...` da 404.

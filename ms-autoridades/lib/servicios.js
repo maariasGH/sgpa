@@ -8,14 +8,19 @@ const ZONA_HORARIA      = process.env.APP_TIMEZONE      || 'America/Argentina/Bu
 const hoy = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_HORARIA }).format(new Date());
 
-// Devuelve true si el distrito existe y está activo
-const verificarDistrito = async (id_distrito) => {
+// Devuelve el distrito o null si no existe
+const obtenerDistrito = async (id_distrito) => {
   const resp = await fetch(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`);
-  if (resp.status === 404) return false;
+  if (resp.status === 404) return null;
   if (!resp.ok) throw new Error(`ms-distritos respondió ${resp.status}`);
   const body = await resp.json();
-  const distrito = body.data ?? body;
-  return distrito.activo === true;
+  return body.data ?? body;
+};
+
+// Devuelve true si el distrito existe y está activo
+const verificarDistrito = async (id_distrito) => {
+  const distrito = await obtenerDistrito(id_distrito);
+  return distrito?.activo === true;
 };
 
 // Cantidad de audiencias activas (no CANCELADA/SUSPENDIDA) con fecha >= hoy
@@ -33,4 +38,4 @@ const contarAudienciasFuturas = async (id_autoridad) => {
   return body.total ?? 0;
 };
 
-module.exports = { verificarDistrito, contarAudienciasFuturas };
+module.exports = { obtenerDistrito, verificarDistrito, contarAudienciasFuturas };

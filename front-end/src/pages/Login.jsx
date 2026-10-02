@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { C, FUENTE } from "../theme";
 import { useAuth } from "../hooks/useAuth";
 import { mensajeError } from "../api/client";
@@ -6,7 +7,8 @@ import Balanza from "../components/Balanza";
 import { Alert, Btn, Card, Input } from "../components/ui";
 
 // ─── LOGIN (CU-08) ───────────────────────────────────────────────────────────
-export default function Login({ onVolver, onIngresado }) {
+// Al iniciar sesión, App redirige sola al panel (o a la ruta que se quería abrir)
+export default function Login() {
   const { iniciarSesion } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -20,7 +22,6 @@ export default function Login({ onVolver, onIngresado }) {
     setError("");
     try {
       await iniciarSesion(username.trim(), password);
-      onIngresado();
     } catch (err) {
       setError(mensajeError(err));
       setEnviando(false);
@@ -36,23 +37,23 @@ export default function Login({ onVolver, onIngresado }) {
           <div style={{ color:C.sky, fontSize:12, letterSpacing:1, textTransform:"uppercase", marginTop:4 }}>Sistema de Gestión de Audiencias</div>
         </div>
         <Card style={{ padding:28 }}>
-          <h2 style={{ margin:"0 0 20px", fontSize:17, color:C.navy, textAlign:"center", fontWeight:700 }}>Acceso interno</h2>
+          <h1 style={{ margin:"0 0 20px", fontSize:17, color:C.navy, textAlign:"center", fontWeight:700 }}>Acceso interno</h1>
           {error && <Alert type="error">{error}</Alert>}
           <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <Input label="Usuario" value={username} onChange={setUsername} placeholder="ej: admin" />
-            <Input label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+            <Input label="Usuario" value={username} onChange={setUsername} placeholder="ej: admin" autoComplete="username" />
+            <Input label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="••••••••" autoComplete="current-password" />
             <Btn type="submit" variant="primary" size="lg" style={{ width:"100%", marginTop:4 }} disabled={enviando}>
               {enviando ? "Ingresando…" : "Iniciar sesión"}
             </Btn>
           </form>
-          {import.meta.env.DEV && (
+          {import.meta.env?.DEV && (
             <div style={{ marginTop:20, padding:"12px 0 0", borderTop:`1px solid ${C.border}`, textAlign:"center", fontSize:11, color:C.muted }}>
               Desarrollo: <strong>admin</strong> / admin1234
             </div>
           )}
-          <button onClick={onVolver} style={{ width:"100%", marginTop:16, padding:8, background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, fontSize:13, color:C.muted, cursor:"pointer" }}>
+          <Link to="/" style={{ display:"block", textAlign:"center", marginTop:16, padding:8, border:`1px solid ${C.border}`, borderRadius:6, fontSize:13, color:C.muted, textDecoration:"none" }}>
             ← Volver a la vista pública
-          </button>
+          </Link>
         </Card>
       </div>
     </div>

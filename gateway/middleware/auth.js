@@ -19,13 +19,29 @@ const esRutaPublica = (method, path) => {
   );
 };
 
+// Los debug tokens saltean la verificación real del JWT, así que solo se aceptan
+// con NODE_ENV=development y si son largos (no adivinables). En cualquier otro
+// entorno se ignoran aunque estén definidos en el .env.
+const LARGO_MINIMO_DEBUG = 32;
+const DEBUG_HABILITADO = process.env.NODE_ENV === 'development';
+
+const debugToken = (nombreVariable) => {
+  const valor = process.env[nombreVariable];
+  if (!DEBUG_HABILITADO || !valor) return null;
+  if (valor.length < LARGO_MINIMO_DEBUG) {
+    console.warn(`⚠️  ${nombreVariable} ignorado: debe tener al menos ${LARGO_MINIMO_DEBUG} caracteres`);
+    return null;
+  }
+  return valor;
+};
+
+const DEBUG_TOKEN    = debugToken('DEBUG_TOKEN');
+const DEBUG_TOKEN_OP = debugToken('DEBUG_TOKEN_OP');
+
 // Devuelve el usuario del token, o null si el token no es válido.
 // Lanza error si ms-usuarios no responde.
 const identificar = async (token) => {
-  // ── Debug token (solo en desarrollo) ─────────────────────────
-  // Seteá DEBUG_TOKEN en el .env para saltear la verificación real
-  // Ejemplo: DEBUG_TOKEN=debug123
-  const DEBUG_TOKEN = process.env.DEBUG_TOKEN;
+  // ── Debug token de Administrador (solo en desarrollo) ────────
   if (DEBUG_TOKEN && token === DEBUG_TOKEN) {
     console.warn('⚠️  Usando DEBUG_TOKEN — no usar en producción');
     return {
@@ -36,8 +52,7 @@ const identificar = async (token) => {
     };
   }
 
-  // ── Debug token de Operador (solo en desarrollo) ─────────────────────────
-  const DEBUG_TOKEN_OP = process.env.DEBUG_TOKEN_OP;
+  // ── Debug token de Operador (solo en desarrollo) ─────────────
   if (DEBUG_TOKEN_OP && token === DEBUG_TOKEN_OP) {
     console.warn('⚠️  Usando DEBUG_TOKEN_OP — no usar en producción');
     return {

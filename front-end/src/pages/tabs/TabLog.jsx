@@ -2,9 +2,10 @@ import { useState } from "react";
 import { C } from "../../theme";
 import { fmtFechaHora } from "../../utils";
 import { useCarga } from "../../hooks/useCarga";
+import { useEsMovil } from "../../hooks/useEsMovil";
 import * as sgpa from "../../api/sgpa";
 import { mensajeError } from "../../api/client";
-import { Alert, Btn, Card, Cargando, FiltroSelect, Paginador } from "../../components/ui";
+import { Alert, Btn, Card, Cargando, FiltroSelect, ItemMovil, Paginador } from "../../components/ui";
 
 const POR_PAGINA = 25;
 const ACCIONES = ["ALTA","MODIFICACION","BAJA","LOGIN","LOGOUT"];
@@ -64,11 +65,12 @@ const describir = (l) => {
 export default function TabLog() {
   const [filtros, setFiltros] = useState({ usuario:"", tipo_accion:"", entidad:"", desde:"", hasta:"" });
   const [pagina, setPagina] = useState(0);
+  const esMovil = useEsMovil();
 
   const cambiar = (k, v) => { setFiltros(f => ({ ...f, [k]: v })); setPagina(0); };
   const hayFiltros = Object.values(filtros).some(Boolean);
 
-  const { datos: usuarios } = useCarga(() => sgpa.listarUsuarios().then(r => r.data), [], []);
+  const { datos: usuarios } = useCarga(() => sgpa.listarTodosLosUsuarios(), [], []);
   const { datos, error, cargando } = useCarga(
     () => sgpa.listarLogs({ ...filtros, page: pagina + 1, limit: POR_PAGINA }),
     [filtros, pagina],
@@ -76,7 +78,7 @@ export default function TabLog() {
   const logs = datos?.data ?? [];
   const total = datos?.total ?? 0;
 
-  const username = (id) => usuarios.find(u => u.id_usuario === id)?.username ?? (id === 0 ? "debug" : `#${id}`);
+  const username = (id) => usuarios.find(u => u.id_usuario === id)?.username ?? `#${id}`;
 
   const inputFecha = { padding:"6px 10px", border:`1.5px solid ${C.border}`, borderRadius:6, fontSize:13 };
 
@@ -89,32 +91,57 @@ export default function TabLog() {
       <Alert type="info">Solo lectura — cada acción del sistema queda registrada automáticamente por el API Gateway.</Alert>
       {error && <Alert type="error">{mensajeError(error)}</Alert>}
 
-      <Card style={{ padding:"12px 16px", marginBottom:14, display:"flex", flexWrap:"wrap", gap:10, alignItems:"center" }}>
-        <FiltroSelect value={filtros.usuario} onChange={v=>cambiar("usuario", v)}>
+      <Card style={{ padding: esMovil ? 12 : "12px 16px", marginBottom:14 }}>
+      <div className="filtros">
+        <FiltroSelect etiqueta="Usuario" value={filtros.usuario} onChange={v=>cambiar("usuario", v)}>
           <option value="">Todos los usuarios</option>
           {usuarios.map(u => <option key={u.id_usuario} value={u.id_usuario}>{u.username}</option>)}
         </FiltroSelect>
-        <FiltroSelect value={filtros.tipo_accion} onChange={v=>cambiar("tipo_accion", v)}>
+        <FiltroSelect etiqueta="Acción" value={filtros.tipo_accion} onChange={v=>cambiar("tipo_accion", v)}>
           <option value="">Todas las acciones</option>
           {ACCIONES.map(a => <option key={a} value={a}>{a}</option>)}
         </FiltroSelect>
-        <FiltroSelect value={filtros.entidad} onChange={v=>cambiar("entidad", v)}>
+        <FiltroSelect etiqueta="Entidad" value={filtros.entidad} onChange={v=>cambiar("entidad", v)}>
           <option value="">Todas las entidades</option>
           {ENTIDADES.map(e => <option key={e} value={e}>{e}</option>)}
         </FiltroSelect>
         <label style={{ fontSize:12, color:C.muted }}>Desde <input type="date" value={filtros.desde} onChange={e=>cambiar("desde", e.target.value)} style={inputFecha} /></label>
         <label style={{ fontSize:12, color:C.muted }}>Hasta <input type="date" value={filtros.hasta} onChange={e=>cambiar("hasta", e.target.value)} style={inputFecha} /></label>
-        {hayFiltros && <Btn size="sm" variant="outline" onClick={()=>{ setFiltros({ usuario:"", tipo_accion:"", entidad:"", desde:"", hasta:"" }); setPagina(0); }}>Limpiar</Btn>}
+        {hayFiltros && <Btn size="sm" variant="outline" style={esMovil ? { width:"100%", padding:"9px 12px" } : {}} onClick={()=>{ setFiltros({ usuario:"", tipo_accion:"", entidad:"", desde:"", hasta:"" }); setPagina(0); }}>Limpiar</Btn>}
+      </div>
       </Card>
 
       <Card style={{ overflow:"hidden" }}>
-        {cargando && !logs.length ? <Cargando /> : (
+        {cargando && !logs.length ? <Cargando /> : esMovil ? (
+          <div style={{ opacity: cargando ? .6 : 1 }}>
+            {logs.length === 0 ? (
+              <div style={{ padding:32, textAlign:"center", color:C.muted }}>Sin registros para los filtros aplicados</div>
+            ) : logs.map(l => {
+              const s = COLOR_ACCION[l.tipo_accion] || { bg:"#EEE", c:"#333" };
+              return (
+                <ItemMovil key={l.id_log}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6 }}>
+                    <span style={{ fontFamily:"monospace", fontSize:11, color:C.muted }}>{fmtFechaHora(l.fecha_hora)}</span>
+                    <span style={{ fontWeight:700, color:C.navy, fontSize:13 }}>{username(l.id_usuario)}</span>
+                  </div>
+                  <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:6, marginBottom:6 }}>
+                    <span style={{ background:s.bg, color:s.c, padding:"2px 9px", borderRadius:20, fontSize:11, fontWeight:700 }}>{l.tipo_accion}</span>
+                    <span style={{ background:"#EBF8FF", color:"#2C5282", padding:"2px 8px", borderRadius:20, fontSize:11, fontWeight:600 }}>{l.entidad}</span>
+                    {l.id_entidad != null && <span style={{ fontSize:11, color:C.muted, fontFamily:"monospace" }}>#{l.id_entidad}</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:C.text, lineHeight:1.4, overflowWrap:"anywhere" }}>{describir(l)}</div>
+                  {l.ip_origen && <div style={{ fontSize:11, color:C.muted, fontFamily:"monospace", marginTop:4 }}>IP {l.ip_origen}</div>}
+                </ItemMovil>
+              );
+            })}
+          </div>
+        ) : (
           <div style={{ overflowX:"auto", opacity: cargando ? .6 : 1 }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
                 <tr style={{ background:C.navy }}>
                   {["Fecha y hora","Usuario","Acción","Entidad afectada","Detalle","IP"].map(h => (
-                    <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:C.white, letterSpacing:.4, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,.15)" }}>{h}</th>
+                    <th key={h} scope="col" style={{ padding:"9px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:C.white, letterSpacing:.4, whiteSpace:"nowrap", borderRight:"1px solid rgba(255,255,255,.15)" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -144,8 +171,8 @@ export default function TabLog() {
           </div>
         )}
         {datos?.totalPages > 1 && (
-          <div style={{ padding:"12px 18px", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", background:"#FAFCFF", flexWrap:"wrap", gap:8 }}>
-            <span style={{ fontSize:12, color:C.muted }}>Página {pagina+1} de {datos.totalPages}</span>
+          <div style={{ padding:"12px 18px", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent: esMovil ? "center" : "space-between", alignItems:"center", background:"#FAFCFF", flexWrap:"wrap", gap:8 }}>
+            {!esMovil && <span style={{ fontSize:12, color:C.muted }}>Página {pagina+1} de {datos.totalPages}</span>}
             <Paginador pagina={pagina} totalPags={datos.totalPages} onCambiar={setPagina} />
           </div>
         )}

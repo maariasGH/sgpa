@@ -1,13 +1,13 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
-const { fn, col } = require('sequelize');
+const { fn, col, literal, Op } = require('sequelize');
 const { Audiencia, EstadoAudiencia } = require('../models');
 const v = require('../lib/validaciones');
 const { rangoPredefinido } = require('../lib/fechas');
 const { ErrorHttp, manejarError } = require('../lib/errores');
 const { construirFiltros } = require('../lib/filtros');
-const { cargarEstados } = require('../lib/estados');
-const { obtenerSalas } = require('../lib/servicios');
+const { cargarEstados, idsDe, ESTADOS_INACTIVOS } = require('../lib/estados');
+const { obtenerSalas, obtenerAutoridades } = require('../lib/servicios');
 const { enriquecer } = require('../lib/presentacion');
 
 const router = express.Router();
@@ -43,38 +43,72 @@ const resolverParametros = (req) => {
   return { desde, hasta, id_distrito };
 };
 
-const contarPor = (campo, where) =>
-  Audiencia.findAll({
-    attributes: [campo, [fn('COUNT', col('id_audiencia')), 'cantidad']],
+// `campo` puede ser un nombre de columna o [expresión, alias]
+const contarPor = (campo, where) => {
+  const [expr, alias] = Array.isArray(campo) ? campo : [campo, campo];
+  return Audiencia.findAll({
+    attributes: [[expr, alias], [fn('COUNT', col('id_audiencia')), 'cantidad']],
     where,
-    group: [campo],
-    order: [[campo, 'ASC']],
+    group: [alias],
+    order: [[literal(`"${alias}"`), 'ASC']],
     raw:   true,
   });
+};
+
+const HORA_INICIO = [literal('EXTRACT(HOUR FROM "hora_inicio")::int'), 'hora'];
+
+// Ordena de mayor a menor cantidad
+const desc = (filas) => filas.sort((a, b) => b.cantidad - a.cantidad);
 
 const calcularEstadisticas = async ({ desde, hasta, id_distrito }) => {
   const where = await construirFiltros({ desde, hasta, id_distrito });
-  const [{ porId }, salas, total, porEstado, porTipo, porSala, porDia] = await Promise.all([
+  // Audiencias que ocupan sala/juez (sin canceladas ni suspendidas)
+  const whereActivas = { ...where, id_estado: { [Op.notIn]: await idsDe(ESTADOS_INACTIVOS) } };
+
+  const [{ porId }, salas, total, activas, porEstado, porTipo, porSala, porSalaActivas, porDia, porJuez, porOperador, porHora] = await Promise.all([
     cargarEstados(),
     obtenerSalas(id_distrito),
     Audiencia.count({ where }),
+    Audiencia.count({ where: whereActivas }),
     contarPor('id_estado', where),
     contarPor('tipo_audiencia', where),
     contarPor('id_sala', where),
+    contarPor('id_sala', whereActivas),
     contarPor('fecha', where),
+    contarPor('id_juez', whereActivas),
+    contarPor('id_usuario_carga', where),
+    contarPor(HORA_INICIO, whereActivas),
   ]);
 
-  const nombreSala = new Map(salas.map(s => [s.id_sala, s.nombre]));
+  const sala = new Map(salas.map(s => [s.id_sala, s]));
+  const jueces = new Map((await obtenerAutoridades(porJuez.map(r => r.id_juez))).map(a => [a.id_autoridad, a]));
+  const cant = (r) => Number(r.cantidad);
+
+  // La audiencia no guarda el distrito: se agrupa a partir de la sala
+  const porDistrito = new Map();
+  porSala.forEach(r => {
+    const id = sala.get(r.id_sala)?.id_distrito ?? null;
+    porDistrito.set(id, (porDistrito.get(id) ?? 0) + cant(r));
+  });
 
   return {
     desde,
     hasta,
     id_distrito,
     total,
-    por_estado: porEstado.map(r => ({ estado: porId[r.id_estado], cantidad: Number(r.cantidad) })),
-    por_tipo:   porTipo.map(r => ({ tipo_audiencia: r.tipo_audiencia, cantidad: Number(r.cantidad) })),
-    por_sala:   porSala.map(r => ({ id_sala: r.id_sala, sala: nombreSala.get(r.id_sala) ?? null, cantidad: Number(r.cantidad) })),
-    por_dia:    porDia.map(r => ({ fecha: r.fecha, cantidad: Number(r.cantidad) })),
+    activas,
+    por_estado:       porEstado.map(r => ({ estado: porId[r.id_estado], cantidad: cant(r) })),
+    por_tipo:         desc(porTipo.map(r => ({ tipo_audiencia: r.tipo_audiencia, cantidad: cant(r) }))),
+    por_sala:         desc(porSala.map(r => ({ id_sala: r.id_sala, sala: sala.get(r.id_sala)?.nombre ?? null, cantidad: cant(r) }))),
+    por_sala_activas: desc(porSalaActivas.map(r => ({ id_sala: r.id_sala, sala: sala.get(r.id_sala)?.nombre ?? null, cantidad: cant(r) }))),
+    por_dia:          porDia.map(r => ({ fecha: r.fecha, cantidad: cant(r) })),
+    por_juez:         desc(porJuez.map(r => {
+      const j = jueces.get(r.id_juez);
+      return { id_juez: r.id_juez, juez: j ? `${j.apellido}, ${j.nombre}` : null, cantidad: cant(r) };
+    })),
+    por_operador:     desc(porOperador.map(r => ({ id_usuario: r.id_usuario_carga, cantidad: cant(r) }))),
+    por_hora:         porHora.map(r => ({ hora: Number(r.hora), cantidad: cant(r) })),
+    por_distrito:     desc([...porDistrito].map(([id, cantidad]) => ({ id_distrito: id, cantidad }))),
   };
 };
 
