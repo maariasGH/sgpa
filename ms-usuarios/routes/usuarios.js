@@ -145,6 +145,9 @@ router.post('/', async (req, res) => {
     if (!distrito) {
       return res.status(400).json({ error: 'El distrito indicado no existe o está inactivo', code: 'DISTRITO_INVALIDO' });
     }
+    if (dni.toString().length > 8) {
+      return res.status(400).json({ error: 'El dni no debe superar los 8 dígitos', code: 'DATOS_INVALIDOS' });
+    }
 
     const rolOperador = await Rol.findOne({ where: { nombre: 'OPERADOR' } });
     const nuevo = await Usuario.create({

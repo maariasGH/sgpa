@@ -37,6 +37,9 @@ const validarDatos = (datos, parcial = false) => {
   if (datos.dni !== undefined && !(Number.isInteger(Number(datos.dni)) && Number(datos.dni) > 0)) {
     return 'dni debe ser un número entero positivo';
   }
+  if (String(datos.dni).length > 8) {
+    return 'El dni no debe superar los 8 dígitos';
+  }
   if (datos.cargo !== undefined && !Autoridad.CARGOS.includes(datos.cargo)) {
     return `cargo debe ser uno de: ${Autoridad.CARGOS.join(', ')}`;
   }
