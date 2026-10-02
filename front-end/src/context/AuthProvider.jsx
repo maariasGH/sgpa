@@ -3,46 +3,32 @@ import { AuthContext } from "./AuthContext";
 import { setToken, onSesionExpirada } from "../api/client";
 import * as sgpa from "../api/sgpa";
 
+// El JWT dura 5 minutos: se renueva automáticamente un minuto antes
 const RENOVAR_CADA_MS = 4 * 60 * 1000;
-const LS_KEY = "sgpa_sesion"; // clave en localStorage
 
+// Sesión en memoria: al recargar la página hay que volver a iniciar sesión
+// (el token no se guarda en localStorage por seguridad).
 export function AuthProvider({ children }) {
-  // Intenta restaurar la sesión guardada al montar
-  const [sesion, setSesion] = useState(() => {
-    try {
-      const guardada = localStorage.getItem(LS_KEY);
-      if (!guardada) return null;
-      const parsed = JSON.parse(guardada);
-      // Restaura el token en el cliente HTTP
-      setToken(parsed.token);
-      return parsed;
-    } catch {
-      return null;
-    }
-  });
+  const [sesion, setSesion] = useState(null); // { token, usuario }
 
   const cerrarSesion = useCallback(async ({ avisarServidor = true } = {}) => {
     if (avisarServidor) await sgpa.logout().catch(() => {});
     setToken(null);
     setSesion(null);
-    localStorage.removeItem(LS_KEY); // ← borra la sesión guardada
   }, []);
 
   const iniciarSesion = useCallback(async (username, password) => {
     const { token, usuario } = await sgpa.login(username, password);
     setToken(token);
-    const nueva = { token, usuario };
-    setSesion(nueva);
-    localStorage.setItem(LS_KEY, JSON.stringify(nueva)); // ← guarda la sesión
+    setSesion({ token, usuario });
     return usuario;
   }, []);
 
-  // Si la API responde 401 se cierra la sesión local
+  // Si la API responde 401 (token vencido) se cierra la sesión local
   useEffect(() => {
     onSesionExpirada(() => {
       setToken(null);
       setSesion(null);
-      localStorage.removeItem(LS_KEY);
     });
   }, []);
 
@@ -53,12 +39,6 @@ export function AuthProvider({ children }) {
       try {
         const { token } = await sgpa.refresh();
         setToken(token);
-        // Actualiza el token guardado sin tocar el objeto usuario
-        setSesion(prev => {
-          const actualizada = { ...prev, token };
-          localStorage.setItem(LS_KEY, JSON.stringify(actualizada));
-          return actualizada;
-        });
       } catch {
         cerrarSesion({ avisarServidor: false });
       }
@@ -75,4 +55,3 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }
-
