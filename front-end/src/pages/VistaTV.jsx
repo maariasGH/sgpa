@@ -3,7 +3,7 @@ import { C, FUENTE, POR_PAGINA } from "../theme";
 import { hhmm, abrevSala } from "../utils";
 import { useCarga } from "../hooks/useCarga";
 import * as sgpa from "../api/sgpa";
-import Balanza from "../components/Balanza";
+import LogoPoderJudicial from "../components/LogoPoderJudicial";
 
 const REFRESCO_MS = 60 * 1000;   // recarga de datos
 const PAGINA_MS   = 15 * 1000;   // avance automático de página
@@ -66,10 +66,9 @@ export default function VistaTV({ id_distrito, nombreDistrito, onSalir }) {
       {/* Header */}
       <div style={{ background:"#0D1F3C", padding:"14px 40px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"2px solid #1E3A5F", flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-          <Balanza size={52} radius={8} />
-          <div>
-            <div style={{ fontSize:22, fontWeight:800, letterSpacing:.3 }}>Poder Judicial – Santa Fe</div>
-            <div style={{ fontSize:13, color:C.sky, letterSpacing:1, textTransform:"uppercase" }}>Sistema de Gestión de Audiencias · {nombreDistrito}</div>
+          <LogoPoderJudicial alto={64} />
+          <div style={{ fontSize:15, color:C.sky, letterSpacing:1, textTransform:"uppercase", lineHeight:1.5 }}>
+            Sistema de Gestión de Audiencias<br/>{nombreDistrito}
           </div>
         </div>
         <div style={{ textAlign:"right" }}>

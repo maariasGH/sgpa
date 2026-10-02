@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { C, FUENTE, ESTADOS, POR_PAGINA, TIPOS_AUDIENCIA } from "../theme";
-import { hoy, sumarDias, fmtFecha, hhmm, abrevSala } from "../utils";
+import { hoy, sumarDias, fmtFecha, hhmm, abrevSala, esFechaValida } from "../utils";
+import { activable } from "../a11y";
 import { useCarga } from "../hooks/useCarga";
 import * as sgpa from "../api/sgpa";
 import { mensajeError } from "../api/client";
-import Balanza from "../components/Balanza";
+import LogoPoderJudicial from "../components/LogoPoderJudicial";
 import DetalleAudiencia from "../components/DetalleAudiencia";
-import { Btn, Card, Alert, EstadoBadge, FiltroSelect, Paginador, SelectorFecha, Vacio, Cargando } from "../components/ui";
+import { useEsMovil } from "../hooks/useEsMovil";
+import { Btn, Card, Alert, DatoMovil, EstadoBadge, FiltroSelect, ItemMovil, Paginador, SelectorFecha, Vacio, Cargando } from "../components/ui";
 
 const COLUMNAS = [
   { l:"Hora\nInicio", w:58 }, { l:"Hora\nFin", w:58 }, { l:"Sala", w:85 },
@@ -19,16 +22,34 @@ function Persona({ autoridad }) {
   return <><div style={{fontWeight:700,fontSize:13}}>{autoridad.apellido}</div><div style={{fontSize:11,color:C.muted}}>{autoridad.nombre}</div></>;
 }
 
+const nombreCorto = (autoridad) => autoridad ? `${autoridad.apellido}, ${autoridad.nombre}` : "–";
+
 // ─── VISTA PÚBLICA (CU-01) ───────────────────────────────────────────────────
-export default function VistaPublica({ onIrALogin }) {
-  const [fecha, setFecha] = useState(hoy);
-  const [filtros, setFiltros] = useState({ id_sala:"", tipo:"", estado:"", id_distrito:"" });
+// Fecha y filtros viven en la URL (/?fecha=2026-09-25&id_distrito=1…) para poder
+// compartir el link o volver con "atrás" a la misma consulta
+const FILTROS = ["id_distrito", "id_sala", "tipo", "estado"];
+
+export default function VistaPublica() {
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [pagina, setPagina] = useState(0);
   const [detalle, setDetalle] = useState(null);
+  const [verFiltros, setVerFiltros] = useState(false);
+  const esMovil = useEsMovil();
 
-  const cambiarFiltro = (k, v) => { setFiltros(f => ({ ...f, [k]: v })); setPagina(0); };
-  const cambiarFecha  = (f) => { setFecha(f); setPagina(0); };
-  const limpiar       = () => { setFiltros({ id_sala:"", tipo:"", estado:"", id_distrito:"" }); setPagina(0); };
+  const fecha   = esFechaValida(params.get("fecha")) ? params.get("fecha") : hoy();
+  const filtros = Object.fromEntries(FILTROS.map(k => [k, params.get(k) ?? ""]));
+
+  // Aplica varios cambios de una vez (setParams no acumula llamadas seguidas)
+  const actualizar = (cambios) => {
+    const nuevos = new URLSearchParams(params);
+    Object.entries(cambios).forEach(([k, v]) => (v ? nuevos.set(k, v) : nuevos.delete(k)));
+    setParams(nuevos, { replace: true });
+    setPagina(0);
+  };
+  const cambiarFiltro = (k, v) => actualizar({ [k]: v });
+  const cambiarFecha  = (f) => actualizar({ fecha: f === hoy() ? "" : f });
+  const limpiar       = () => actualizar(Object.fromEntries(FILTROS.map(k => [k, ""])));
   const hayFiltros    = Object.values(filtros).some(Boolean);
 
   const { datos: distritos } = useCarga(() => sgpa.listarDistritos(), [], []);
@@ -46,75 +67,111 @@ export default function VistaPublica({ onIrALogin }) {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:FUENTE }}>
       {/* Header */}
-      <header style={{ background:C.navy, color:C.white, padding:"0 24px" }}>
-        <div style={{ padding:"0 16px", display:"flex", alignItems:"center", justifyContent:"space-between", height:60 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <Balanza size={36} />
-            <div>
-              <div style={{ fontWeight:700, fontSize:15, letterSpacing:.3 }}>Poder Judicial – Santa Fe</div>
-              <div style={{ fontSize:11, color:C.sky, letterSpacing:.5 }}>SISTEMA DE GESTIÓN DE AUDIENCIAS</div>
-            </div>
+      <header style={{ background:C.navy, color:C.white, padding: esMovil ? "0 12px" : "0 24px" }}>
+        <div style={{ padding: esMovil ? 0 : "0 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, height: esMovil ? 56 : 60 }}>
+          <div style={{ display:"flex", alignItems:"center", gap: esMovil ? 10 : 14, minWidth:0 }}>
+            <LogoPoderJudicial alto={esMovil ? 36 : 42} />
+            {!esMovil && (
+              <div style={{ fontSize:11, color:C.sky, letterSpacing:.5, whiteSpace:"nowrap", borderLeft:"1px solid rgba(168,212,240,.35)", paddingLeft:14 }}>
+                SISTEMA DE GESTIÓN<br/>DE AUDIENCIAS
+              </div>
+            )}
           </div>
-          <Btn onClick={onIrALogin} variant="ghost" style={{ color:C.sky, borderColor:C.sky, fontSize:12 }}>Acceso Interno →</Btn>
+          <Btn onClick={()=>navigate("/login")} variant="ghost" style={{ color:C.sky, borderColor:C.sky, fontSize:12, flexShrink:0, whiteSpace:"nowrap", ...(esMovil && { padding:"7px 10px" }) }}>{esMovil ? "Ingresar →" : "Acceso Interno →"}</Btn>
         </div>
       </header>
 
-      <main style={{ padding:"24px 32px" }}>
+      <main style={{ padding: esMovil ? "16px 12px" : "24px 32px" }}>
         {/* Título + fecha */}
-        <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-end", marginBottom:20 }}>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-end", marginBottom: esMovil ? 14 : 20 }}>
           <div style={{ flex:1, minWidth:200 }}>
-            <h1 style={{ margin:"0 0 4px", fontSize:22, color:C.navy, fontWeight:800 }}>Calendario de Audiencias</h1>
+            <h1 style={{ margin:"0 0 4px", fontSize: esMovil ? 19 : 22, color:C.navy, fontWeight:800 }}>Calendario de Audiencias</h1>
             <p style={{ margin:0, fontSize:13, color:C.muted }}>Consulta pública — sin autenticación requerida</p>
           </div>
-          <SelectorFecha fecha={fecha} onCambiar={cambiarFecha} hoy={hoy} sumarDias={sumarDias} />
+          <div style={{ display:"flex", width: esMovil ? "100%" : "auto" }}>
+            <SelectorFecha fecha={fecha} onCambiar={cambiarFecha} hoy={hoy} sumarDias={sumarDias} />
+          </div>
         </div>
 
         {/* Filtros */}
-        <Card style={{ padding:"14px 18px", marginBottom:16, display:"flex", flexWrap:"wrap", gap:12, alignItems:"center" }}>
-          <div style={{ fontSize:12, fontWeight:700, color:C.navy, textTransform:"uppercase", letterSpacing:.5 }}>Filtros</div>
-          <FiltroSelect value={filtros.id_distrito} onChange={v=>{ cambiarFiltro("id_distrito", v); cambiarFiltro("id_sala", ""); }} minWidth={160}>
+        {esMovil && (
+          <Btn variant="outline" onClick={()=>setVerFiltros(v => !v)} aria-expanded={verFiltros} aria-controls="filtros-publicos" style={{ width:"100%", marginBottom:12, padding:"10px 14px", display:"flex", justifyContent:"space-between", background:C.white }}>
+            <span>Filtros{hayFiltros ? ` (${Object.values(filtros).filter(Boolean).length})` : ""}</span>
+            <span aria-hidden="true">{verFiltros ? "▲" : "▼"}</span>
+          </Btn>
+        )}
+        {(!esMovil || verFiltros) && <Card style={{ padding: esMovil ? 12 : "14px 18px", marginBottom:16 }}>
+        <div id="filtros-publicos" role="group" aria-label="Filtros" className="filtros" style={{ gap:12 }}>
+          {!esMovil && <div aria-hidden="true" style={{ fontSize:12, fontWeight:700, color:C.navy, textTransform:"uppercase", letterSpacing:.5 }}>Filtros</div>}
+          <FiltroSelect etiqueta="Distrito" value={filtros.id_distrito} onChange={v=>actualizar({ id_distrito: v, id_sala: "" })} minWidth={160}>
             <option value="">Todos los distritos</option>
             {distritos.map(d => <option key={d.id_distrito} value={String(d.id_distrito)}>{d.nombre}</option>)}
           </FiltroSelect>
-          <FiltroSelect value={filtros.id_sala} onChange={v=>cambiarFiltro("id_sala", v)} minWidth={160}>
+          <FiltroSelect etiqueta="Sala" value={filtros.id_sala} onChange={v=>cambiarFiltro("id_sala", v)} minWidth={160}>
             <option value="">Todas las salas</option>
             {salasFiltro.map(s => <option key={s.id_sala} value={s.id_sala}>{s.nombre}</option>)}
           </FiltroSelect>
-          <FiltroSelect value={filtros.tipo} onChange={v=>cambiarFiltro("tipo", v)} minWidth={160}>
+          <FiltroSelect etiqueta="Tipo de audiencia" value={filtros.tipo} onChange={v=>cambiarFiltro("tipo", v)} minWidth={160}>
             <option value="">Todos los tipos</option>
             {TIPOS_AUDIENCIA.map(t => <option key={t} value={t}>{t}</option>)}
           </FiltroSelect>
-          <FiltroSelect value={filtros.estado} onChange={v=>cambiarFiltro("estado", v)}>
+          <FiltroSelect etiqueta="Estado" value={filtros.estado} onChange={v=>cambiarFiltro("estado", v)}>
             <option value="">Todos los estados</option>
             {ESTADOS.map(e => <option key={e} value={e}>{e.replace(/_/g," ")}</option>)}
           </FiltroSelect>
-          {hayFiltros && <Btn onClick={limpiar} variant="outline" size="sm">Limpiar</Btn>}
-        </Card>
+          {hayFiltros && <Btn onClick={limpiar} variant="outline" size="sm" style={esMovil ? { width:"100%", padding:"9px 12px" } : {}}>Limpiar</Btn>}
+        </div>
+        </Card>}
 
         {error && <Alert type="error">{mensajeError(error)}</Alert>}
 
         {/* Tabla */}
         <Card style={{ overflow:"hidden" }}>
-          <div style={{ padding:"12px 18px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-            <span style={{ fontWeight:700, color:C.navy, fontSize:14 }}>
+          <div style={{ padding: esMovil ? "10px 14px" : "12px 18px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+            <span style={{ fontWeight:700, color:C.navy, fontSize: esMovil ? 13 : 14 }}>
               {fmtFecha(fecha)} — {total} audiencia{total!==1?"s":""}
               {total > POR_PAGINA && <span style={{fontWeight:400,color:C.muted,fontSize:12}}> · mostrando {pagina*POR_PAGINA+1}–{Math.min((pagina+1)*POR_PAGINA,total)}</span>}
             </span>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{ fontSize:12, color:C.muted }}>Clic en fila para ver el detalle</span>
-              <Paginador pagina={pagina} totalPags={totalPags} onCambiar={setPagina} compacto />
-            </div>
+            {!esMovil && (
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{ fontSize:12, color:C.muted }}>Clic o Enter en una fila para ver el detalle</span>
+                <Paginador pagina={pagina} totalPags={totalPags} onCambiar={setPagina} compacto />
+              </div>
+            )}
           </div>
 
           {cargando && !audiencias.length ? <Cargando /> : audiencias.length === 0 ? (
             <Vacio titulo="Sin audiencias para esta fecha" subtitulo="Probá con otra fecha o limpiá los filtros" />
+          ) : esMovil ? (
+            <div style={{ opacity: cargando ? .6 : 1 }}>
+              {audiencias.map(a => (
+                <ItemMovil key={a.id_audiencia} onClick={()=>setDetalle(a)} seleccionado={detalle?.id_audiencia === a.id_audiencia}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6 }}>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
+                      <span style={{ fontWeight:800, color:C.navy, fontSize:16 }}>{hhmm(a.hora_inicio)}</span>
+                      <span style={{ color:C.muted, fontSize:12 }}>– {hhmm(a.hora_fin)}</span>
+                      <span style={{ fontWeight:700, color:C.navy, fontSize:13, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>· {abrevSala(a.sala?.nombre)}</span>
+                    </div>
+                    <EstadoBadge estado={a.estado} />
+                  </div>
+                  <div style={{ fontWeight:600, fontSize:14, color:C.text, lineHeight:1.35, marginBottom:4 }}>{a.caratula}</div>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>
+                    {a.tipo_audiencia} · <span style={{ fontFamily:"monospace" }}>{a.cuij}</span>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <DatoMovil label="Juez">{nombreCorto(a.juez)}</DatoMovil>
+                    <DatoMovil label="Fiscal">{nombreCorto(a.fiscal)}</DatoMovil>
+                  </div>
+                </ItemMovil>
+              ))}
+            </div>
           ) : (
             <div style={{ overflowX:"auto", opacity: cargando ? .6 : 1 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead>
                   <tr style={{ background:C.navy }}>
                     {COLUMNAS.map(h => (
-                      <th key={h.l} style={{
+                      <th key={h.l} scope="col" style={{
                         padding:"9px 10px", textAlign:"center", fontSize:11, fontWeight:700, color:C.white, letterSpacing:.2,
                         borderRight:"1px solid rgba(255,255,255,.15)", whiteSpace:"pre-line", lineHeight:1.2, verticalAlign:"bottom",
                         ...(h.w ? { width:h.w, minWidth:h.w } : { minWidth:180 }),
@@ -128,8 +185,8 @@ export default function VistaPublica({ onIrALogin }) {
                     const rowBg = sel ? "#DBEAFE" : i%2===0 ? C.white : "#F8FAFC";
                     const celda = { padding:"10px 10px", borderRight:`1px solid ${C.border}` };
                     return (
-                      <tr key={a.id_audiencia} onClick={()=>setDetalle(sel ? null : a)}
-                        style={{ background:rowBg, borderBottom:`1px solid ${C.border}`, cursor:"pointer", outline:sel?`2px solid ${C.blue}`:"none", outlineOffset:-1 }}
+                      <tr key={a.id_audiencia} {...activable(()=>setDetalle(sel ? null : a))}
+                        style={{ background:rowBg, borderBottom:`1px solid ${C.border}`, ...(sel && { outline:`2px solid ${C.blue}`, outlineOffset:-1 }) }}
                         onMouseEnter={e=>{ if(!sel) e.currentTarget.style.background="#EFF6FF"; }}
                         onMouseLeave={e=>{ if(!sel) e.currentTarget.style.background=rowBg; }}>
                         <td style={{ ...celda, textAlign:"center", fontWeight:800, color:C.navy, fontSize:14, whiteSpace:"nowrap" }}>{hhmm(a.hora_inicio)}</td>
@@ -154,8 +211,8 @@ export default function VistaPublica({ onIrALogin }) {
           )}
 
           {totalPags > 1 && (
-            <div style={{padding:"12px 18px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FAFCFF",flexWrap:"wrap",gap:8}}>
-              <span style={{fontSize:12,color:C.muted}}>Página {pagina+1} de {totalPags} · {total} audiencia{total!==1?"s":""}</span>
+            <div style={{padding:"12px 18px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent: esMovil ? "center" : "space-between",alignItems:"center",background:"#FAFCFF",flexWrap:"wrap",gap:8}}>
+              {!esMovil && <span style={{fontSize:12,color:C.muted}}>Página {pagina+1} de {totalPags} · {total} audiencia{total!==1?"s":""}</span>}
               <Paginador pagina={pagina} totalPags={totalPags} onCambiar={setPagina} />
             </div>
           )}

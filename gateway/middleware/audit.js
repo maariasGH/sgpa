@@ -48,6 +48,15 @@ const tipoAccion = (req, partes) => {
   return 'MODIFICACION';
 };
 
+// Operaciones masivas: el microservicio devuelve { cambios: [{ <pk>, antes, despues }] }
+// y se registra un log por cada registro modificado
+const registrarCambios = (req, partes, cambios) => {
+  const { pk } = req.servicio;
+  return Promise.all(cambios.map(c =>
+    registrar(req, { partes, id: c[pk] ?? null, antes: c.antes ?? null, datos: c.despues ?? null })
+  ));
+};
+
 const registrar = async (req, { partes, id, antes, datos }) => {
   const { entidad, pk, recurso } = req.servicio;
   const despues = datos?.data ?? datos;
@@ -94,7 +103,10 @@ const auditar = async (req, res, next) => {
   const jsonOriginal = res.json.bind(res);
   res.json = (datos) => {
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      registrar(req, { partes, id, antes, datos }).catch(err =>
+      const registro = Array.isArray(datos?.cambios)
+        ? registrarCambios(req, partes, datos.cambios)
+        : registrar(req, { partes, id, antes, datos });
+      registro.catch(err =>
         console.error('Error registrando auditoría:', err.message)
       );
     }

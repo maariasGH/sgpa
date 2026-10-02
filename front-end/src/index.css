@@ -7,11 +7,17 @@ html, body, #root {
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #F0F4F8;
   color: #1A202C;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 button:focus-visible,
@@ -20,4 +26,125 @@ input:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #2B6CB0;
   outline-offset: 1px;
+}
+
+/* Filas y tarjetas clickeables (ver src/a11y.js) */
+.activable {
+  cursor: pointer;
+}
+.activable:focus-visible {
+  outline: 2px solid #2B6CB0;
+  outline-offset: -2px;
+}
+
+/* Oculto visualmente pero legible por lectores de pantalla */
+.solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── LAYOUT RESPONSIVE ──────────────────────────────────────────────────── */
+
+/* Grilla de formularios: 2 columnas en escritorio, 1 en teléfono */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Fila de acciones al pie de modales */
+.acciones-modal {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Barra de filtros */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Navegación de pestañas con scroll horizontal sin barra visible */
+.nav-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Evita el zoom automático de iOS al enfocar campos (requiere >= 16px) */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .acciones-modal {
+    flex-direction: column-reverse;
+  }
+  .acciones-modal > button {
+    width: 100%;
+    padding-top: 11px !important;
+    padding-bottom: 11px !important;
+  }
+
+  /* Cada filtro ocupa el ancho completo */
+  .filtros > select,
+  .filtros > input,
+  .filtros > label,
+  .filtros > .filtro-ancho {
+    flex: 1 1 100%;
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .filtros > label input {
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  /* Modales tipo "hoja" desde abajo */
+  .modal-fondo {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-caja {
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 14px 14px 0 0 !important;
+  }
+  .modal-cabecera {
+    padding: 14px 16px !important;
+  }
+  .modal-cuerpo {
+    padding: 16px !important;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* Menú lateral del panel en teléfono: entra desde la izquierda */
+.menu-lateral {
+  animation: menu-lateral-entra .18s ease-out;
+}
+@keyframes menu-lateral-entra {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-lateral { animation: none; }
 }

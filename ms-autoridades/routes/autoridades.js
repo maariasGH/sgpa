@@ -1,7 +1,8 @@
 const express = require('express');
 const { Op, Sequelize } = require('sequelize');
 const { Autoridad } = require('../models');
-const { verificarDistrito, contarAudienciasFuturas } = require('../lib/servicios');
+const { obtenerDistrito, verificarDistrito, contarAudienciasFuturas } = require('../lib/servicios');
+const { notificarAlta, notificarBaja, notificarReactivacion, PIE } = require('../lib/notificaciones');
 const { enviarCorreo } = require('../lib/mailer');
 
 const router = express.Router();
@@ -35,6 +36,9 @@ const validarDatos = (datos, parcial = false) => {
   if (datos.apellido !== undefined && !String(datos.apellido).trim()) return 'apellido no puede estar vacío';
   if (datos.dni !== undefined && !(Number.isInteger(Number(datos.dni)) && Number(datos.dni) > 0)) {
     return 'dni debe ser un número entero positivo';
+  }
+  if (String(datos.dni).length > 8) {
+    return 'El dni no debe superar los 8 dígitos';
   }
   if (datos.cargo !== undefined && !Autoridad.CARGOS.includes(datos.cargo)) {
     return `cargo debe ser uno de: ${Autoridad.CARGOS.join(', ')}`;
@@ -121,8 +125,10 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ error: 'Solo podés registrar autoridades en tu propio distrito', code: 'DISTRITO_AJENO' });
   }
 
+  let distritoAutoridad;
   try {
-    if (!(await verificarDistrito(id_distrito))) {
+    distritoAutoridad = await obtenerDistrito(id_distrito);
+    if (distritoAutoridad?.activo !== true) {
       return res.status(400).json({ error: 'El distrito indicado no existe o está inactivo', code: 'DISTRITO_INVALIDO' });
     }
   } catch (err) {
@@ -141,6 +147,7 @@ router.post('/', async (req, res) => {
       id_distrito,
     });
     res.status(201).json({ data: nueva, message: 'Autoridad registrada' });
+    notificarAlta(nueva, distritoAutoridad.nombre);
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ error: 'Ya existe una autoridad con ese DNI en el distrito', code: 'DNI_DUPLICADO' });
@@ -205,7 +212,9 @@ router.put('/:id', async (req, res) => {
 
 // ── PATCH /autoridades/:id/baja ──────────────────────────────
 // Baja lógica. No se permite si tiene audiencias activas futuras.
+// Body: { motivo } — se le envía por email a la autoridad y queda en el log de auditoría.
 router.patch('/:id/baja', async (req, res) => {
+  const motivo = req.body?.motivo ? String(req.body.motivo).trim() : '';
   try {
     const autoridad = await Autoridad.findByPk(req.params.id);
     if (!autoridad) return res.status(404).json({ error: 'Autoridad no encontrada', code: 'NO_ENCONTRADO' });
@@ -233,6 +242,7 @@ router.patch('/:id/baja', async (req, res) => {
 
     await autoridad.update({ estado: false });
     res.json({ data: autoridad, message: 'Autoridad dada de baja' });
+    notificarBaja(autoridad, motivo);
   } catch (err) {
     errorInterno(res, 'dar de baja autoridad', err);
   }
@@ -253,6 +263,11 @@ router.patch('/:id/alta', async (req, res) => {
 
     await autoridad.update({ estado: true });
     res.json({ data: autoridad, message: 'Autoridad reactivada' });
+
+    // Después de responder: el nombre del distrito es solo para el texto del email
+    obtenerDistrito(autoridad.id_distrito)
+      .catch(() => null)
+      .then(distrito => notificarReactivacion(autoridad, distrito?.nombre));
   } catch (err) {
     errorInterno(res, 'reactivar autoridad', err);
   }
@@ -276,12 +291,28 @@ router.post('/notificaciones', async (req, res) => {
       enviarCorreo({
         to:      a.email,
         subject: asunto,
-        text:    `Estimado/a ${a.nombre} ${a.apellido}:\n\n${mensaje}\n\n— SGPA, Poder Judicial de Santa Fe`,
+        text:    `Estimado/a ${a.nombre} ${a.apellido}:\n\n${mensaje}\n\n${PIE}`,
       }).catch(err => console.error(`Error enviando email a ${a.email}:`, err.message));
     }
   } catch (err) {
     console.error('Error procesando notificaciones:', err.message);
   }
+});
+
+// ── POST /autoridades/notificaciones/email ───────────────────
+// USO INTERNO (ms-usuarios: alta, baja y reactivación de operadores; las de autoridades se envían directo). El gateway no expone este endpoint.
+// Envía un correo a una dirección. Body: { to, asunto, mensaje }
+// El mensaje llega completo (con su firma): no se le agrega nada
+router.post('/notificaciones/email', async (req, res) => {
+  const { to, asunto, mensaje } = req.body;
+  if (!EMAIL_REGEX.test(String(to || '')) || !asunto || !mensaje) {
+    return res.status(400).json({ error: 'to (email válido), asunto y mensaje son requeridos', code: 'DATOS_INVALIDOS' });
+  }
+
+  // Responde enseguida; el envío sigue en segundo plano
+  res.status(202).json({ message: 'Notificación en proceso' });
+
+  enviarCorreo({ to, subject: asunto, text: mensaje }).catch(err => console.error(`Error enviando email a ${to}:`, err.message));
 });
 
 module.exports = router;

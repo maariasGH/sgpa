@@ -4,6 +4,12 @@ const ZONA_HORARIA = process.env.APP_TIMEZONE || 'America/Argentina/Buenos_Aires
 const hoy = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_HORARIA }).format(new Date());
 
+// Hora actual (HH:MM:SS) en la zona horaria del Poder Judicial
+const ahora = () =>
+  new Intl.DateTimeFormat('en-GB', {
+    timeZone: ZONA_HORARIA, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).format(new Date());
+
 // Suma días a una fecha YYYY-MM-DD
 const sumarDias = (fecha, dias) => {
   const d = new Date(`${fecha}T00:00:00Z`);
@@ -33,4 +39,4 @@ const rangoPredefinido = (rango, referencia = hoy()) => {
   }
 };
 
-module.exports = { hoy, sumarDias, rangoPredefinido };
+module.exports = { hoy, ahora, sumarDias, rangoPredefinido };

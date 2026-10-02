@@ -30,8 +30,11 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # URL del gateway vista desde el navegador (no desde el contenedor)
-      - VITE_API_URL=${VITE_API_URL}
+      # URL del gateway vista desde el navegador (no desde el contenedor).
+      # Vacía = mismo host que abrió la página, puerto 3000 (sirve para PC y teléfono en la LAN)
+      - VITE_API_URL=${VITE_API_URL:-}
+      # Detecta cambios en el código montado desde Windows (sin esto Vite sirve versiones viejas)
+      - VITE_POLLING=true
     command: sh -c "npm install && npm run dev -- --host"
 
   # ── API GATEWAY ───────────────────────────────────────────────
@@ -59,9 +62,12 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3000
+      # Los DEBUG_TOKEN solo se aceptan con NODE_ENV=development (ver gateway/middleware/auth.js)
+      - NODE_ENV=${NODE_ENV:-development}
       - DEBUG_TOKEN=${DEBUG_TOKEN}
       - DEBUG_TOKEN_OP=${DEBUG_TOKEN_OP}
-      - CORS_ORIGIN=${CORS_ORIGIN}
+      # Orígenes permitidos separados por coma. En development la red local (teléfono) se acepta sola
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
@@ -138,6 +144,9 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM}
+      - SMTP_REPLY_TO=${SMTP_REPLY_TO:-}
+      # Dirección de contacto que figura al pie de los emails a autoridades
+      - SOPORTE_EMAIL=${SOPORTE_EMAIL:-}
       - PORT=3003
     command: sh -c "npm install && npm run dev"
     depends_on:
@@ -162,6 +171,12 @@ services:
       - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_usuarios
       - MS_DISTRITOS_URL=http://ms-distritos:3001
+      # Los emails a operadores (alta / baja) los envía ms-autoridades
+      - MS_AUTORIDADES_URL=http://ms-autoridades:3003
+      # Dirección de contacto que figura al pie de los emails a operadores
+      - SOPORTE_EMAIL=${SOPORTE_EMAIL:-}
+      # Solo para el texto del pie: el Reply-To lo pone ms-autoridades al enviar
+      - SMTP_REPLY_TO=${SMTP_REPLY_TO:-}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3004

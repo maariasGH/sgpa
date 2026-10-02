@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt  = require('bcrypt');
 const { Op }  = require('sequelize');
 const { Usuario, Rol } = require('../models');
+const { notificarAlta, notificarBaja, notificarReactivacion } = require('../lib/notificaciones');
 
 const router = express.Router();
 
@@ -9,6 +10,7 @@ const MS_DISTRITOS_URL = process.env.MS_DISTRITOS_URL || 'http://localhost:3001'
 const BCRYPT_ROUNDS    = 12;
 const EMAIL_REGEX      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN     = 8;
+const MOTIVO_MAX       = 500;
 
 // Nunca se devuelve password_hash
 const SIN_PASSWORD = { exclude: ['password_hash'] };
@@ -29,12 +31,13 @@ const errorUnico = (res, err) => {
   return res.status(409).json({ error: `Ya existe un usuario con ese ${campo}`, code: 'DUPLICADO' });
 };
 
-// Devuelve true si el distrito existe y está activo
-const verificarDistrito = async (id_distrito) => {
+// Devuelve el distrito si existe y está activo; si no, null
+const obtenerDistritoActivo = async (id_distrito) => {
   const resp = await fetch(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`);
-  if (!resp.ok) return false;
+  if (!resp.ok) return null;
   const body = await resp.json();
-  return (body.data ?? body).activo === true;
+  const distrito = body.data ?? body;
+  return distrito.activo === true ? distrito : null;
 };
 
 // Valida campos de un operador. Con parcial=true solo valida los presentes.
@@ -138,8 +141,12 @@ router.post('/', async (req, res) => {
   const id_distrito = parseInt(req.body.id_distrito);
 
   try {
-    if (!(await verificarDistrito(id_distrito))) {
+    const distrito = await obtenerDistritoActivo(id_distrito);
+    if (!distrito) {
       return res.status(400).json({ error: 'El distrito indicado no existe o está inactivo', code: 'DISTRITO_INVALIDO' });
+    }
+    if (dni.toString().length > 8) {
+      return res.status(400).json({ error: 'El dni no debe superar los 8 dígitos', code: 'DATOS_INVALIDOS' });
     }
 
     const rolOperador = await Rol.findOne({ where: { nombre: 'OPERADOR' } });
@@ -154,6 +161,7 @@ router.post('/', async (req, res) => {
     });
 
     const creado = await Usuario.findByPk(nuevo.id_usuario, { attributes: SIN_PASSWORD, include: INCLUDE_ROL });
+    notificarAlta(creado, distrito.nombre);
     res.status(201).json({ data: serializar(creado), message: 'Operador creado' });
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') return errorUnico(res, err);
@@ -177,7 +185,7 @@ router.put('/:id', async (req, res) => {
 
     if (cambios.id_distrito !== undefined) {
       cambios.id_distrito = parseInt(cambios.id_distrito);
-      if (cambios.id_distrito !== usuario.id_distrito && !(await verificarDistrito(cambios.id_distrito))) {
+      if (cambios.id_distrito !== usuario.id_distrito && !(await obtenerDistritoActivo(cambios.id_distrito))) {
         return res.status(400).json({ error: 'El distrito indicado no existe o está inactivo', code: 'DISTRITO_INVALIDO' });
       }
     }
@@ -196,14 +204,22 @@ router.put('/:id', async (req, res) => {
 });
 
 // ── PATCH /usuarios/:id/baja ─────────────────────────────────
-// Baja lógica: el operador ya no puede iniciar sesión
+// Baja lógica: el operador ya no puede iniciar sesión. Body: { motivo }
+// El motivo se le envía por email y queda en el log de auditoría (body del request).
 router.patch('/:id/baja', async (req, res) => {
+  const motivo = req.body?.motivo ? String(req.body.motivo).trim() : '';
+  if (!motivo) return res.status(400).json({ error: 'El motivo de la baja es obligatorio', code: 'MOTIVO_REQUERIDO' });
+  if (motivo.length > MOTIVO_MAX) {
+    return res.status(400).json({ error: `El motivo no puede superar los ${MOTIVO_MAX} caracteres`, code: 'DATOS_INVALIDOS' });
+  }
+
   try {
     const usuario = await buscarOperador(req.params.id, res);
     if (!usuario) return;
     if (!usuario.estado) return res.status(409).json({ error: 'El usuario ya está inactivo', code: 'ESTADO_INVALIDO' });
 
     await usuario.update({ estado: false });
+    notificarBaja(usuario, motivo);
     res.json({ data: serializar(usuario), message: 'Operador dado de baja' });
   } catch (err) {
     errorInterno(res, 'dar de baja usuario', err);
@@ -211,6 +227,7 @@ router.patch('/:id/baja', async (req, res) => {
 });
 
 // ── PATCH /usuarios/:id/alta ─────────────────────────────────
+// Reactiva un operador dado de baja y le avisa por email
 router.patch('/:id/alta', async (req, res) => {
   try {
     const usuario = await buscarOperador(req.params.id, res);
@@ -219,6 +236,11 @@ router.patch('/:id/alta', async (req, res) => {
 
     await usuario.update({ estado: true });
     res.json({ data: serializar(usuario), message: 'Operador reactivado' });
+
+    // Después de responder: el nombre del distrito es solo para el texto del email
+    obtenerDistritoActivo(usuario.id_distrito)
+      .catch(() => null)
+      .then(distrito => notificarReactivacion(usuario, distrito?.nombre));
   } catch (err) {
     errorInterno(res, 'reactivar usuario', err);
   }

@@ -2,11 +2,11 @@ const express = require('express');
 const { Op }  = require('sequelize');
 const { sequelize, Audiencia, EstadoAudiencia } = require('../models');
 const v = require('../lib/validaciones');
-const { hoy } = require('../lib/fechas');
+const { hoy, ahora } = require('../lib/fechas');
 const { enriquecer } = require('../lib/presentacion');
 const { ErrorHttp, manejarError } = require('../lib/errores');
 const { construirFiltros } = require('../lib/filtros');
-const { obtenerSala, obtenerAutoridad, notificarAutoridades } = require('../lib/servicios');
+const { obtenerSala, obtenerSalas, obtenerAutoridad, notificarAutoridades } = require('../lib/servicios');
 const {
   ESTADOS_INACTIVOS,
   ESTADOS_FINALES,
@@ -296,6 +296,65 @@ router.put('/:id', async (req, res) => {
     res.json({ data, message: 'Audiencia modificada' });
   } catch (err) {
     manejarError(res, 'modificar audiencia', err);
+  }
+});
+
+// ── PATCH /audiencias/finalizar-vencidas ─────────────────────
+// Las audiencias EN_HORARIO o DEMORADA cuyo horario de fin ya pasó (hora argentina)
+// quedan REALIZADA. El panel lo llama al abrir la pestaña Audiencias.
+// El operador solo afecta las audiencias de las salas de su distrito.
+// Devuelve { cambios: [{ id_audiencia, antes, despues }] } (el gateway audita cada uno).
+const ESTADOS_EN_CURSO = ['EN_HORARIO', 'DEMORADA'];
+
+router.patch('/finalizar-vencidas', async (req, res) => {
+  try {
+    exigirAutenticado(req);
+    const { rol, distrito } = usuarioDe(req);
+
+    const fecha = hoy();
+    const where = {
+      id_estado: { [Op.in]: await idsDe(ESTADOS_EN_CURSO) },
+      [Op.or]: [
+        { fecha: { [Op.lt]: fecha } },
+        { fecha, hora_fin: { [Op.lte]: ahora() } },
+      ],
+    };
+    if (rol === 'OPERADOR') {
+      const salas = await obtenerSalas(distrito);
+      if (!salas.length) return res.json({ data: [], cambios: [], total: 0, message: 'Sin audiencias vencidas' });
+      where.id_sala = { [Op.in]: salas.map(s => s.id_sala) };
+    }
+
+    const realizada = await idEstado('REALIZADA');
+    const vencidas = await sequelize.transaction(async (transaction) => {
+      const filas = await Audiencia.findAll({ where, include: INCLUDE_ESTADO, transaction, lock: { level: transaction.LOCK.UPDATE, of: Audiencia }, order: [['fecha', 'ASC'], ['hora_inicio', 'ASC']] });
+      if (filas.length) {
+        await Audiencia.update(
+          { id_estado: realizada },
+          { where: { id_audiencia: { [Op.in]: filas.map(a => a.id_audiencia) } }, transaction },
+        );
+      }
+      return filas;
+    });
+
+    if (!vencidas.length) return res.json({ data: [], cambios: [], total: 0, message: 'Sin audiencias vencidas' });
+
+    const antes   = await enriquecer(vencidas);
+    const despues = await enriquecer(await Audiencia.findAll({
+      where: { id_audiencia: { [Op.in]: vencidas.map(a => a.id_audiencia) } },
+      include: INCLUDE_ESTADO,
+      order: [['fecha', 'ASC'], ['hora_inicio', 'ASC']],
+    }));
+    const despuesPorId = new Map(despues.map(a => [a.id_audiencia, a]));
+
+    res.json({
+      data:    despues,
+      cambios: antes.map(a => ({ id_audiencia: a.id_audiencia, antes: a, despues: despuesPorId.get(a.id_audiencia) })),
+      total:   vencidas.length,
+      message: `${vencidas.length} audiencia(s) marcadas como REALIZADA`,
+    });
+  } catch (err) {
+    manejarError(res, 'finalizar audiencias vencidas', err);
   }
 });
 
