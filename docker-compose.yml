@@ -31,8 +31,8 @@ services:
       - "5173:5173"
     environment:
       # URL del gateway vista desde el navegador (no desde el contenedor).
-      # Vacía = mismo host que abrió la página, puerto 3000 (sirve para PC y teléfono en la LAN)
-      - VITE_API_URL=${VITE_API_URL:-}
+      # Vacía = mismo host que abrió la página, puerto 3010 (sirve para PC y teléfono en la LAN)
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3010}
       # Detecta cambios en el código montado desde Windows (sin esto Vite sirve versiones viejas)
       - VITE_POLLING=true
     command: sh -c "npm install && npm run dev -- --host"
@@ -46,7 +46,7 @@ services:
     volumes:
       - ./gateway:/app
     ports:
-      - "3000:3000"
+      - "3010:3000"
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -193,6 +193,8 @@ services:
     container_name: sgpa_ms_audiencias
     volumes:
       - ./ms-audiencias:/app
+      # Grabaciones (MP4) de las audiencias
+      - videos:/videos
     ports:
       - "3005:3005"
     environment:
@@ -205,6 +207,9 @@ services:
       - MS_SALAS_URL=http://ms-salas:3002
       - MS_AUTORIDADES_URL=http://ms-autoridades:3003
       - MS_USUARIOS_URL=http://ms-usuarios:3004
+      - VIDEOS_DIR=/videos
+      # Tamaño máximo de una grabación en MB
+      - VIDEO_MAX_MB=${VIDEO_MAX_MB:-2048}
       - PORT=3005
     command: sh -c "npm install && npm run dev"
     depends_on:
@@ -239,3 +244,5 @@ services:
 # para re-inicializar la base: docker compose down -v
 volumes:
   pgdata:
+  # Grabaciones de audiencias subidas desde el panel (ms-audiencias)
+  videos:

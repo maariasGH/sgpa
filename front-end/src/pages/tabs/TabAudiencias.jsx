@@ -186,6 +186,7 @@ export default function TabAudiencias({ usuario, esAdmin, distritos, salas, nomb
           audiencia={detalle}
           onCerrar={()=>setDetalle(null)}
           filasExtra={filasExtra(detalle)}
+          onVideoActualizado={(a) => { setDetalle(a); recargar(); }}
           pie={<>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               {puedeModificar(detalle) && <>

@@ -50,6 +50,11 @@ const Audiencia = sequelize.define('Audiencia', {
     type:      DataTypes.TEXT,
     allowNull: true,
   },
+  // Nombre del archivo MP4 de la grabación en VIDEOS_DIR (NULL = sin grabación)
+  video: {
+    type:      DataTypes.STRING(255),
+    allowNull: true,
+  },
   // Los completa la DB (DEFAULT NOW() y trigger trg_audiencia_updated_at)
   created_at: { type: DataTypes.DATE },
   updated_at: { type: DataTypes.DATE },

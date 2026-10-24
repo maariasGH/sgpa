@@ -56,12 +56,42 @@ const pedir = async (method, path, { params, body, archivo } = {}) => {
   return datos;
 };
 
+// Sube un archivo como multipart/form-data (PUT). Usa XMLHttpRequest porque fetch
+// no informa el progreso de subida. `onProgreso` recibe un número de 0 a 1.
+// Devuelve { promesa, cancelar }.
+const subir = (path, campo, archivo, onProgreso) => {
+  const xhr = new XMLHttpRequest();
+  const promesa = new Promise((resolve, reject) => {
+    xhr.open("PUT", `${BASE}${path}`);
+    if (tokenActual) xhr.setRequestHeader("Authorization", `Bearer ${tokenActual}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgreso?.(e.loaded / e.total); };
+    xhr.onerror = () => reject(new ApiError(0, { error: "No se pudo conectar con el servidor" }));
+    xhr.onabort = () => reject(new ApiError(0, { error: "Subida cancelada", code: "CANCELADA" }));
+    xhr.onload = () => {
+      let datos = null;
+      try { datos = JSON.parse(xhr.responseText); } catch { /* respuesta no JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(datos);
+      if (xhr.status === 401 && tokenActual) alExpirarSesion();
+      reject(new ApiError(xhr.status, datos));
+    };
+    const form = new FormData();
+    form.append(campo, archivo);
+    xhr.send(form);
+  });
+  return { promesa, cancelar: () => xhr.abort() };
+};
+
+// URL absoluta de un recurso del gateway (ej: src de un <video>, que no manda el JWT)
+export const urlApi = (path) => `${BASE}${path}`;
+
 export const api = {
   get:    (path, params)       => pedir("GET",    path, { params }),
   post:   (path, body)         => pedir("POST",   path, { body }),
   put:    (path, body)         => pedir("PUT",    path, { body }),
   patch:  (path, body)         => pedir("PATCH",  path, { body }),
+  delete: (path)               => pedir("DELETE", path),
   blob:   (path, params)       => pedir("GET",    path, { params, archivo: true }),
+  subir,
 };
 
 // Mensaje legible de un error de la API (incluye detalle de superposiciones)

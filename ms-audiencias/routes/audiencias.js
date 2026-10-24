@@ -6,6 +6,7 @@ const { hoy, ahora } = require('../lib/fechas');
 const { enriquecer } = require('../lib/presentacion');
 const { ErrorHttp, manejarError } = require('../lib/errores');
 const { construirFiltros } = require('../lib/filtros');
+const { recibirVideo, rutaVideo, borrarVideo } = require('../lib/videos');
 const { obtenerSala, obtenerSalas, obtenerAutoridad, notificarAutoridades } = require('../lib/servicios');
 const {
   ESTADOS_INACTIVOS,
@@ -212,6 +213,82 @@ router.get('/:id', async (req, res) => {
     res.json({ data });
   } catch (err) {
     manejarError(res, 'obtener audiencia', err);
+  }
+});
+
+// ── GET /audiencias/:id/video ────────────────────────────────
+// Grabación de la audiencia (pública). sendFile responde a los Range del
+// navegador (206), así el reproductor puede adelantar sin descargar todo.
+router.get('/:id/video', async (req, res) => {
+  try {
+    const audiencia = await buscarAudiencia(req.params.id);
+    if (!audiencia.video) throw new ErrorHttp(404, 'SIN_VIDEO', 'La audiencia no tiene grabación');
+
+    res.sendFile(rutaVideo(audiencia.video), (err) => {
+      if (!err || res.headersSent) return;
+      if (err.code === 'ENOENT' || err.status === 404) {
+        return res.status(404).json({ error: 'No se encontró el archivo de la grabación', code: 'SIN_VIDEO' });
+      }
+      manejarError(res, 'enviar video', err);
+    });
+  } catch (err) {
+    manejarError(res, 'obtener video', err);
+  }
+});
+
+// Operador del distrito de la sala o Administrador
+const buscarParaGestionarVideo = async (req) => {
+  exigirAutenticado(req);
+  const audiencia = await buscarAudiencia(req.params.id);
+  const sala = await obtenerSala(audiencia.id_sala);
+  if (sala) exigirDistrito(req, sala);
+  return audiencia;
+};
+
+// ── PUT /audiencias/:id/video ────────────────────────────────
+// Sube (o reemplaza) la grabación. multipart/form-data con el archivo en el campo "video".
+// Se valida permiso antes de recibir el archivo, para no cargar el disco en vano.
+router.put('/:id/video', async (req, res) => {
+  try {
+    const audiencia = await buscarParaGestionarVideo(req);
+    if (ESTADOS_INACTIVOS.includes(audiencia.estado.nombre)) {
+      throw new ErrorHttp(409, 'ESTADO_INVALIDO', `No se puede subir la grabación de una audiencia ${audiencia.estado.nombre}`);
+    }
+    if (!req.is('multipart/form-data')) {
+      throw new ErrorHttp(400, 'VIDEO_REQUERIDO', 'Se espera multipart/form-data con el archivo en el campo "video"');
+    }
+
+    const archivo  = await recibirVideo(req, res);
+    const anterior = audiencia.video;
+    try {
+      await audiencia.update({ video: archivo });
+    } catch (err) {
+      await borrarVideo(archivo);
+      throw err;
+    }
+    if (anterior && anterior !== archivo) borrarVideo(anterior);
+
+    const [data] = await enriquecer([await buscarAudiencia(audiencia.id_audiencia)]);
+    res.json({ data, message: anterior ? 'Grabación reemplazada' : 'Grabación subida' });
+  } catch (err) {
+    manejarError(res, 'subir video', err);
+  }
+});
+
+// ── DELETE /audiencias/:id/video ─────────────────────────────
+router.delete('/:id/video', async (req, res) => {
+  try {
+    const audiencia = await buscarParaGestionarVideo(req);
+    if (!audiencia.video) throw new ErrorHttp(404, 'SIN_VIDEO', 'La audiencia no tiene grabación');
+
+    const anterior = audiencia.video;
+    await audiencia.update({ video: null });
+    borrarVideo(anterior);
+
+    const [data] = await enriquecer([await buscarAudiencia(audiencia.id_audiencia)]);
+    res.json({ data, message: 'Grabación eliminada' });
+  } catch (err) {
+    manejarError(res, 'eliminar video', err);
   }
 });
 

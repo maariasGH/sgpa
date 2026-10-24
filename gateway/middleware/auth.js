@@ -9,6 +9,7 @@ const RUTAS_PUBLICAS = [
   { method: 'GET',  path: /^\/audiencias\/?$/ },          // vista pública del calendario
   { method: 'GET',  path: /^\/audiencias\/tv\/?$/ },      // vista televisor
   { method: 'GET',  path: /^\/audiencias\/\d+\/?$/ },     // detalle de una audiencia
+  { method: 'GET',  path: /^\/audiencias\/\d+\/video\/?$/ }, // grabación de la audiencia
   { method: 'GET',  path: /^\/distritos(\/\d+)?\/?$/ },   // desplegables
   { method: 'GET',  path: /^\/salas(\/\d+)?\/?$/ },       // filtro por sala del calendario
 ];

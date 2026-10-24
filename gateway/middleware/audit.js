@@ -44,7 +44,8 @@ const snapshot = async (req, id) => {
 const tipoAccion = (req, partes) => {
   if (req.servicio.recurso === 'auth') return partes[1] === 'login' ? 'LOGIN' : 'LOGOUT';
   if (req.method === 'POST')   return 'ALTA';
-  if (req.method === 'DELETE' || partes[2] === 'baja') return 'BAJA';
+  // DELETE de un sub-recurso (ej: /audiencias/5/video) modifica la entidad, no la da de baja
+  if ((req.method === 'DELETE' && partes.length <= 2) || partes[2] === 'baja') return 'BAJA';
   return 'MODIFICACION';
 };
 

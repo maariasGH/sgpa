@@ -66,10 +66,13 @@ app.use((err, req, res, next) => {
 });
 
 // ── Arranque ─────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✅ Gateway corriendo en puerto ${PORT} (API en /api)`);
   console.log(`   Microservicios configurados:`);
   for (const [nombre, url] of Object.entries(MS)) {
     console.log(`   · ${nombre.padEnd(12)} → ${url}`);
   }
 });
+
+// La subida de una grabación (video MP4) puede tardar más que el límite por defecto de Node (5 min)
+server.requestTimeout = 60 * 60 * 1000;

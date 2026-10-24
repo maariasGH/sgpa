@@ -4,10 +4,12 @@ import { EstadoBadge } from "./ui";
 import { useId } from "react";
 import { useEsMovil } from "../hooks/useEsMovil";
 import { useDialogo } from "../hooks/useDialogo";
+import GrabacionAudiencia from "./GrabacionAudiencia";
 
 // Drawer lateral con el detalle de una audiencia (vista pública y panel interno)
 // `filasExtra`: [[titulo, valor], ...]  ·  `pie`: contenido del pie (acciones)
-export default function DetalleAudiencia({ audiencia: a, onCerrar, filasExtra = [], pie }) {
+// `onVideoActualizado(audiencia)`: si viene, permite subir / quitar la grabación (Operador / Admin)
+export default function DetalleAudiencia({ audiencia: a, onCerrar, filasExtra = [], pie, onVideoActualizado }) {
   const esMovil = useEsMovil();
   const pad = esMovil ? 16 : 24;
   const ref = useDialogo(onCerrar);
@@ -88,6 +90,8 @@ export default function DetalleAudiencia({ audiencia: a, onCerrar, filasExtra = 
               ))}
             </div>
           </div>
+
+          <GrabacionAudiencia audiencia={a} onActualizada={onVideoActualizado} />
 
           {a.motivo_cambio && (
             <div style={{ background:C.orangeBg, border:"1px solid #FBD38D", borderRadius:8, padding:"12px 16px" }}>

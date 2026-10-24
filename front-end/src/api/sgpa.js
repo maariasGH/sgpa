@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, urlApi } from "./client";
 
 // ms-distritos y ms-salas devuelven el objeto directo; el resto usa { data, ... }
 
@@ -38,6 +38,13 @@ export const finalizarVencidas  = () => api.patch("/audiencias/finalizar-vencida
 // Estadísticas agregadas en la base: { total, activas, por_estado, por_tipo, por_sala_activas, por_juez, por_operador, por_hora, por_distrito, ... }
 export const estadisticas       = (params) => api.get("/audiencias/stats", params).then(r => r.data);
 export const exportarExcel      = (params) => api.blob("/audiencias/stats/export", params);
+
+// Grabación (MP4) de una audiencia. Ver la URL es público; subir / quitar requiere sesión.
+// `a.video` (nombre del archivo) va en la URL para que al reemplazarlo no se use el video viejo del caché.
+export const urlVideoAudiencia = (a) => urlApi(`/audiencias/${a.id_audiencia}/video?v=${encodeURIComponent(a.video)}`);
+// Devuelve { promesa, cancelar }; la promesa resuelve { data: audiencia actualizada }
+export const subirVideoAudiencia  = (id, archivo, onProgreso) => api.subir(`/audiencias/${id}/video`, "video", archivo, onProgreso);
+export const quitarVideoAudiencia = (id) => api.delete(`/audiencias/${id}/video`);
 
 // ── Autoridades ──────────────────────────────────────────────
 // Una página: { data, total, page, limit, totalPages }
