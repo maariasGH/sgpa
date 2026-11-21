@@ -1,4 +1,4 @@
-const RARO = /(\.\.|\/\/|\\|%2e|%2f|%5c|%00)/i;
+const RARO = /(\.\.|\/\.(\/|$)|\/\/|\\|%2e|%2f|%5c|%00)/i;
 
 module.exports = (req, res, next) => {
   if (RARO.test(req.path)) {

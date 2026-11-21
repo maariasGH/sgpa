@@ -316,6 +316,14 @@ router.patch('/:id/alta', async (req, res) => {
   }
 });
 
+// ── Guard: /notificaciones* es solo ms→ms ─────────────────────
+// Toda petición de un usuario pasa por el gateway y llega con x-usuario-*.
+// Las llamadas internas (ms-audiencias, ms-usuarios) no los mandan.
+router.use('/notificaciones', (req, res, next) =>
+  (req.headers['x-usuario-id'] || req.headers['x-usuario-rol'])
+    ? res.status(403).json({ error: 'Endpoint interno', code: 'SOLO_INTERNO' })
+    : next());
+
 // ── POST /autoridades/notificaciones ─────────────────────────
 // USO INTERNO (ms-audiencias). El gateway no expone este endpoint.
 // Body: { ids: [id_autoridad, ...], asunto, mensaje }

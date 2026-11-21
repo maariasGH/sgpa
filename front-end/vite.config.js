@@ -17,6 +17,7 @@ export default defineConfig({
       '/api': {
         target: gatewayProxyTarget,
         changeOrigin: true,
+        xfwd: true,
       },
     },
     watch: process.env.VITE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,

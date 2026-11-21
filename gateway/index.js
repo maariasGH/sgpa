@@ -26,6 +26,8 @@ if (!INTERNAL_API_KEY || INTERNAL_API_KEY.length < 32) {
   process.exit(1);
 }
 
+app.set('trust proxy', 1);
+
 // ── CORS (el frontend corre en otro origen) ──────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
 app.use(cors);
