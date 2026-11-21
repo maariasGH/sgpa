@@ -7,7 +7,7 @@ import App from "../src/App.jsx";
 
 // Respuestas vacías del gateway según la ruta pedida
 const respuesta = (url) => {
-  const { pathname } = new URL(url);
+  const { pathname } = new URL(url, "http://localhost");
   if (pathname.endsWith("/distritos")) return [{ id_distrito: 1, nombre: "Santa Fe" }];
   if (pathname.endsWith("/salas")) return [];
   if (pathname.endsWith("/audiencias/stats")) {
@@ -22,6 +22,7 @@ beforeEach(() => {
 
 const ADMIN    = { id_usuario: 1, nombre: "Admin", rol: "ADMINISTRADOR", id_distrito: null };
 const OPERADOR = { id_usuario: 2, nombre: "Operador SF", rol: "OPERADOR", id_distrito: 1 };
+const OPERADOR_PRIMER_ACCESO = { ...OPERADOR, debe_cambiar_password: true };
 
 const abrir = (ruta, usuario = null) => render(
   h(AuthContext.Provider, {
@@ -33,6 +34,7 @@ describe("rutas públicas", () => {
   test("/ muestra el calendario público", async () => {
     abrir("/");
     expect(await screen.findByRole("heading", { name: "Calendario de Audiencias" })).toBeTruthy();
+    expect(global.fetch.mock.calls.every(([url]) => url.startsWith("/api/"))).toBe(true);
   });
 
   test("una ruta inexistente vuelve al calendario", async () => {
@@ -50,6 +52,12 @@ describe("rutas del panel", () => {
   test("con sesión, /login manda al panel", async () => {
     abrir("/login", OPERADOR);
     expect(await screen.findByRole("heading", { name: "Gestión de audiencias" })).toBeTruthy();
+  });
+
+  test("el primer acceso obliga a cambiar la contraseña antes de entrar al panel", async () => {
+    abrir("/panel/audiencias", OPERADOR_PRIMER_ACCESO);
+    expect(await screen.findByRole("heading", { name: "Elegí una contraseña nueva" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Gestión de audiencias" })).toBeNull();
   });
 
   test("cada pestaña tiene su propia URL", async () => {

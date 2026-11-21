@@ -1,14 +1,15 @@
 const express      = require('express');
-const fetch        = require('node-fetch');
 const { Sala }     = require('../models');
+const { fetchT }   = require('../lib/http');
 
 const router = express.Router();
 
 const MS_DISTRITOS_URL = process.env.MS_DISTRITOS_URL || 'http://localhost:3001';
+const headersInternos = { 'x-internal-key': process.env.INTERNAL_API_KEY };
 
 // ── Función auxiliar: verificar que el distrito existe ────────
 const verificarDistrito = async (id_distrito) => {
-  const resp = await fetch(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`);
+  const resp = await fetchT(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`, { headers: headersInternos });
   if (!resp.ok) return false;
   const data = await resp.json();
   return data.activo === true;

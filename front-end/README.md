@@ -29,10 +29,17 @@ Con Docker no hace falta nada de esto: `docker compose up` desde la raíz levant
 
 El JWT vive solo en memoria: **recargar la página cierra la sesión**. Al volver a iniciar sesión se vuelve a la ruta en la que se estaba.
 
+## Publicación y acceso a grabaciones
+
+Las audiencias nuevas y existentes quedan reservadas por defecto. Un operador puede publicar o reservar audiencias de su distrito; el Administrador puede hacerlo en cualquier distrito. Las causas reservadas y las audiencias en salas GESELL muestran una carátula genérica en la vista pública. Los campos internos, como el motivo del cambio y el usuario que cargó la audiencia, no se exponen.
+
+Las grabaciones ya no son públicas. Un usuario autenticado y autorizado obtiene una URL firmada que vence a los 15 minutos; el reproductor renueva el enlace mientras está abierto. Para bases existentes, aplicar `bd/11_audiencias_reservadas.sql` antes de iniciar la nueva versión para marcar las causas existentes como reservadas.
+
 ## Configuración
 
-- `VITE_API_URL`: URL del gateway. Si está vacía se usa el mismo host que abrió la página en el puerto 3000, así funciona tanto en la PC como desde un teléfono en la red local.
-- Para abrirlo desde un teléfono, agregar `http://<IP-de-la-PC>:5173` a `CORS_ORIGIN` en el `.env` de la raíz.
+- `VITE_API_URL`: URL opcional del gateway cuando se quiere omitir el proxy local. Normalmente se deja vacía: el navegador usa el mismo origen y Vite reenvía `/api` al gateway.
+- En Docker, Vite conecta con el gateway por la red interna. Desde el celular alcanza con abrir `http://<IP-de-la-PC>:5173`; no hace falta habilitar el puerto del gateway ni agregar el origen a `CORS_ORIGIN`.
+- Fuera de Docker, el proxy apunta por defecto a `http://localhost:3010`; para otro destino se puede definir `GATEWAY_PROXY_TARGET` al iniciar Vite.
 
 ## Organización
 

@@ -3,10 +3,17 @@ const { Op }  = require('sequelize');
 const { sequelize, Audiencia, EstadoAudiencia } = require('../models');
 const v = require('../lib/validaciones');
 const { hoy, ahora } = require('../lib/fechas');
-const { enriquecer } = require('../lib/presentacion');
+const { enriquecer, publica, tieneVideoPublico } = require('../lib/presentacion');
 const { ErrorHttp, manejarError } = require('../lib/errores');
 const { construirFiltros } = require('../lib/filtros');
-const { recibirVideo, rutaVideo, borrarVideo } = require('../lib/videos');
+const {
+  recibirVideo,
+  rutaVideo,
+  borrarVideo,
+  firmarUrlVideo,
+  validarFirmaVideo,
+  VIDEO_URL_TTL_SECONDS,
+} = require('../lib/videos');
 const { obtenerSala, obtenerSalas, obtenerAutoridad, notificarAutoridades } = require('../lib/servicios');
 const {
   ESTADOS_INACTIVOS,
@@ -39,9 +46,21 @@ const exigirAutenticado = (req) => {
 // El operador solo gestiona audiencias de salas de su distrito
 const exigirDistrito = (req, sala) => {
   const { rol, distrito } = usuarioDe(req);
+  if (rol === 'OPERADOR' && !distrito) {
+    throw new ErrorHttp(403, 'SIN_DISTRITO', 'El operador no tiene un distrito asignado');
+  }
   if (rol === 'OPERADOR' && sala.id_distrito !== distrito) {
     throw new ErrorHttp(403, 'DISTRITO_AJENO', 'La sala pertenece a otro distrito');
   }
+};
+
+const queryPorDistrito = (req) => {
+  const { rol, distrito } = usuarioDe(req);
+  if (rol !== 'OPERADOR') return req.query;
+  if (!distrito) {
+    throw new ErrorHttp(403, 'SIN_DISTRITO', 'El operador no tiene un distrito asignado');
+  }
+  return { ...req.query, id_distrito: distrito };
 };
 
 const buscarAudiencia = async (id, transaction) => {
@@ -49,6 +68,33 @@ const buscarAudiencia = async (id, transaction) => {
   const audiencia = await Audiencia.findByPk(id, { include: INCLUDE_ESTADO, transaction });
   if (!audiencia) throw new ErrorHttp(404, 'NO_ENCONTRADO', 'Audiencia no encontrada');
   return audiencia;
+};
+
+const buscarParaConsultar = async (req) => {
+  const audiencia = await buscarAudiencia(req.params.id);
+  if (usuarioDe(req).rol === 'OPERADOR') {
+    const sala = await obtenerSala(audiencia.id_sala);
+    if (!sala) throw new ErrorHttp(404, 'SALA_INVALIDA', 'La sala de la audiencia no existe');
+    exigirDistrito(req, sala);
+  }
+  return audiencia;
+};
+
+const buscarParaGestionarVideo = async (req) => {
+  exigirAutenticado(req);
+  return buscarParaConsultar(req);
+};
+
+const exigirVideoPublico = async (audiencia) => {
+  const sala = await obtenerSala(audiencia.id_sala);
+  if (!tieneVideoPublico(audiencia.toJSON(), sala)) {
+    throw new ErrorHttp(404, 'SIN_VIDEO', 'No se encontró una grabación pública');
+  }
+};
+
+const presentarAudiencias = async (req, audiencias) => {
+  const lista = await enriquecer(audiencias);
+  return req.headers['x-usuario-rol'] ? lista : lista.map(publica);
 };
 
 // Valida y normaliza los campos de una audiencia (completa, ya mezclada con los cambios)
@@ -69,6 +115,9 @@ const validarCampos = (datos) => {
     if (!v.esIdValido(datos[campo])) throw new ErrorHttp(400, 'DATOS_INVALIDOS', `${campo} debe ser un entero positivo`);
   }
   if (!v.esFechaValida(datos.fecha)) throw new ErrorHttp(400, 'DATOS_INVALIDOS', 'fecha debe tener formato YYYY-MM-DD');
+  if (datos.reservada !== undefined && typeof datos.reservada !== 'boolean') {
+    throw new ErrorHttp(400, 'DATOS_INVALIDOS', 'reservada debe ser un booleano');
+  }
 
   const errorHorario = v.validarHorario(datos.hora_inicio, datos.hora_fin);
   if (errorHorario) throw new ErrorHttp(400, 'HORARIO_INVALIDO', errorHorario);
@@ -84,6 +133,7 @@ const validarCampos = (datos) => {
     fecha:          datos.fecha,
     hora_inicio:    v.normalizarHora(datos.hora_inicio),
     hora_fin:       v.normalizarHora(datos.hora_fin),
+    reservada:      datos.reservada === undefined ? true : datos.reservada,
   };
 };
 
@@ -173,7 +223,7 @@ router.get('/', async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 500);
 
   try {
-    const where = await construirFiltros(req.query);
+    const where = await construirFiltros(queryPorDistrito(req));
     const { rows, count } = await Audiencia.findAndCountAll({
       where,
       include: INCLUDE_ESTADO,
@@ -181,7 +231,7 @@ router.get('/', async (req, res) => {
       limit,
       offset:  (page - 1) * limit,
     });
-    res.json({ data: await enriquecer(rows), total: count, page, limit, totalPages: Math.ceil(count / limit) });
+    res.json({ data: await presentarAudiencias(req, rows), total: count, page, limit, totalPages: Math.ceil(count / limit) });
   } catch (err) {
     manejarError(res, 'listar audiencias', err);
   }
@@ -193,13 +243,14 @@ router.get('/', async (req, res) => {
 router.get('/tv', async (req, res) => {
   try {
     const fecha = hoy();
-    const where = await construirFiltros({ fecha, activas: 'true', id_distrito: req.query.id_distrito });
+    const { id_distrito } = queryPorDistrito(req);
+    const where = await construirFiltros({ fecha, activas: 'true', id_distrito });
     const audiencias = await Audiencia.findAll({
       where,
       include: INCLUDE_ESTADO,
       order:   [['hora_inicio', 'ASC']],
     });
-    res.json({ data: await enriquecer(audiencias), fecha, total: audiencias.length });
+    res.json({ data: await presentarAudiencias(req, audiencias), fecha, total: audiencias.length });
   } catch (err) {
     manejarError(res, 'obtener vista TV', err);
   }
@@ -208,42 +259,66 @@ router.get('/tv', async (req, res) => {
 // ── GET /audiencias/:id ──────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const audiencia = await buscarAudiencia(req.params.id);
-    const [data] = await enriquecer([audiencia]);
+    const audiencia = await buscarParaConsultar(req);
+    const [data] = await presentarAudiencias(req, [audiencia]);
     res.json({ data });
   } catch (err) {
     manejarError(res, 'obtener audiencia', err);
   }
 });
 
+// ── GET /audiencias/:id/video-url ────────────────────────────
+// Emite una URL breve; sin sesión solo para audiencias publicadas que no sean GESELL.
+router.get('/:id/video-url', async (req, res) => {
+  try {
+    const alcance = req.headers['x-usuario-rol'] ? 'private' : 'public';
+    const audiencia = alcance === 'private'
+      ? await buscarParaGestionarVideo(req)
+      : await buscarAudiencia(req.params.id);
+    if (!audiencia.video) throw new ErrorHttp(404, 'SIN_VIDEO', 'La audiencia no tiene grabación');
+    if (alcance === 'public') await exigirVideoPublico(audiencia);
+
+    const { exp, sig } = firmarUrlVideo(audiencia.id_audiencia, alcance);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      data: {
+        url: `/audiencias/${audiencia.id_audiencia}/video?exp=${exp}&sig=${sig}${alcance === 'public' ? '&scope=public' : ''}`,
+        expires_at: new Date(exp * 1000).toISOString(),
+        expires_in: VIDEO_URL_TTL_SECONDS,
+      },
+    });
+  } catch (err) {
+    manejarError(res, 'generar URL de video', err);
+  }
+});
+
 // ── GET /audiencias/:id/video ────────────────────────────────
-// Grabación de la audiencia (pública). sendFile responde a los Range del
-// navegador (206), así el reproductor puede adelantar sin descargar todo.
+// sendFile responde a Range requests; el acceso requiere sesión o firma vigente.
 router.get('/:id/video', async (req, res) => {
   try {
-    const audiencia = await buscarAudiencia(req.params.id);
+    const alcance = req.query.scope || 'private';
+    const firmado = validarFirmaVideo(req.params.id, req.query.exp, req.query.sig, alcance);
+    const audiencia = firmado
+      ? await buscarAudiencia(req.params.id)
+      : await buscarParaGestionarVideo(req);
     if (!audiencia.video) throw new ErrorHttp(404, 'SIN_VIDEO', 'La audiencia no tiene grabación');
+    if (firmado && alcance === 'public') await exigirVideoPublico(audiencia);
 
-    res.sendFile(rutaVideo(audiencia.video), (err) => {
-      if (!err || res.headersSent) return;
-      if (err.code === 'ENOENT' || err.status === 404) {
-        return res.status(404).json({ error: 'No se encontró el archivo de la grabación', code: 'SIN_VIDEO' });
-      }
-      manejarError(res, 'enviar video', err);
-    });
+    res.sendFile(
+      rutaVideo(audiencia.video),
+      { headers: { 'Cache-Control': 'private, no-store' } },
+      (err) => {
+        if (!err || res.headersSent) return;
+        if (err.code === 'ENOENT' || err.status === 404) {
+          return res.status(404).json({ error: 'No se encontró el archivo de la grabación', code: 'SIN_VIDEO' });
+        }
+        manejarError(res, 'enviar video', err);
+      },
+    );
   } catch (err) {
     manejarError(res, 'obtener video', err);
   }
 });
-
-// Operador del distrito de la sala o Administrador
-const buscarParaGestionarVideo = async (req) => {
-  exigirAutenticado(req);
-  const audiencia = await buscarAudiencia(req.params.id);
-  const sala = await obtenerSala(audiencia.id_sala);
-  if (sala) exigirDistrito(req, sala);
-  return audiencia;
-};
 
 // ── PUT /audiencias/:id/video ────────────────────────────────
 // Sube (o reemplaza) la grabación. multipart/form-data con el archivo en el campo "video".
@@ -432,6 +507,32 @@ router.patch('/finalizar-vencidas', async (req, res) => {
     });
   } catch (err) {
     manejarError(res, 'finalizar audiencias vencidas', err);
+  }
+});
+
+// ── PATCH /audiencias/:id/publicacion ─────────────────────────
+// Publicar o reservar una causa, con control del distrito de su sala.
+router.patch('/:id/publicacion', async (req, res) => {
+  try {
+    exigirAutenticado(req);
+    const reservada = req.body?.reservada;
+    if (typeof reservada !== 'boolean') {
+      throw new ErrorHttp(400, 'DATOS_INVALIDOS', 'reservada debe ser un booleano');
+    }
+
+    const audiencia = await buscarAudiencia(req.params.id);
+    const sala = await obtenerSala(audiencia.id_sala);
+    if (!sala) throw new ErrorHttp(404, 'SALA_INVALIDA', 'La sala de la audiencia no existe');
+    exigirDistrito(req, sala);
+
+    await audiencia.update({ reservada });
+    const [data] = await enriquecer([await buscarAudiencia(audiencia.id_audiencia)]);
+    res.json({
+      data,
+      message: reservada ? 'Audiencia reservada' : 'Audiencia publicada',
+    });
+  } catch (err) {
+    manejarError(res, 'cambiar publicación de audiencia', err);
   }
 });
 

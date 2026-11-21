@@ -4,6 +4,7 @@ const logsRoutes = require('./routes/logs');
 
 const app = express();
 
+app.use(require('./lib/interno'));
 app.use(express.json());
 
 // ── Rutas ────────────────────────────────────────────────────

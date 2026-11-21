@@ -2,10 +2,12 @@ const express = require('express');
 const { sequelize } = require('./models');
 const authRoutes = require('./routes/auth');
 const usuariosRoutes = require('./routes/usuarios');
+const instalarCicloDeVida = require('../common/lifecycle');
 
 const app  = express();
 const PORT = process.env.PORT || 3004;
 
+app.use(require('./lib/interno'));
 app.use(express.json());
 
 // ── Rutas ─────────────────────────────────────────────────────
@@ -23,7 +25,7 @@ app.get('/health', async (req, res) => {
 });
 
 // ── Arranque ──────────────────────────────────────────────────
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   try {
     await sequelize.authenticate();
     console.log(`✅ ms-usuarios corriendo en puerto ${PORT}`);
@@ -32,4 +34,9 @@ app.listen(PORT, async () => {
     console.error('❌ Error conectando a la DB:', err.message);
     process.exit(1);
   }
+});
+
+instalarCicloDeVida(server, {
+  nombre: 'ms-usuarios',
+  cerrarRecursos: () => sequelize.close(),
 });

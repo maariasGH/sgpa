@@ -8,6 +8,7 @@ const { enviarCorreo } = require('../lib/mailer');
 const router = express.Router();
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ROLES_CONSULTA = new Set(['ADMINISTRADOR', 'OPERADOR', 'SISTEMA']);
 
 // ── Helpers ──────────────────────────────────────────────────
 const usuarioDe = (req) => ({
@@ -18,6 +19,31 @@ const usuarioDe = (req) => ({
 const esOperadorDeOtroDistrito = (req, id_distrito) => {
   const { rol, distrito } = usuarioDe(req);
   return rol === 'OPERADOR' && distrito !== id_distrito;
+};
+
+const exigirRolConsulta = (req, res) => {
+  const { rol } = usuarioDe(req);
+  if (!rol) {
+    res.status(401).json({ error: 'Usuario no identificado', code: 'NO_AUTENTICADO' });
+    return null;
+  }
+  if (!ROLES_CONSULTA.has(rol)) {
+    res.status(403).json({ error: 'No tenés permisos para consultar autoridades', code: 'SIN_PERMISO' });
+    return null;
+  }
+  return rol;
+};
+
+const resumenSistema = (autoridad) => {
+  const datos = typeof autoridad.toJSON === 'function' ? autoridad.toJSON() : autoridad;
+  return {
+    id_autoridad: datos.id_autoridad,
+    nombre:       datos.nombre,
+    apellido:     datos.apellido,
+    cargo:        datos.cargo,
+    id_distrito:  datos.id_distrito,
+    estado:       datos.estado,
+  };
 };
 
 const errorInterno = (res, contexto, err) => {
@@ -55,6 +81,9 @@ const validarDatos = (datos, parcial = false) => {
 // Consulta de autoridades (CU-07).
 // Query: ?cargo&id_distrito&estado=true|false&q&ids=1,2,3&page&limit
 router.get('/', async (req, res) => {
+  const rol = exigirRolConsulta(req, res);
+  if (!rol) return;
+
   const { cargo, id_distrito, estado, q, ids } = req.query;
   const page  = Math.max(parseInt(req.query.page)  || 1, 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
@@ -75,8 +104,13 @@ router.get('/', async (req, res) => {
   }
 
   // El operador solo ve autoridades de su distrito
-  const { rol, distrito } = usuarioDe(req);
-  if (rol === 'OPERADOR') where.id_distrito = distrito;
+  const { distrito } = usuarioDe(req);
+  if (rol === 'OPERADOR') {
+    if (!distrito) {
+      return res.status(403).json({ error: 'El operador no tiene un distrito asignado', code: 'SIN_DISTRITO' });
+    }
+    where.id_distrito = distrito;
+  }
 
   try {
     const { rows, count } = await Autoridad.findAndCountAll({
@@ -85,7 +119,13 @@ router.get('/', async (req, res) => {
       limit,
       offset: (page - 1) * limit,
     });
-    res.json({ data: rows, total: count, page, limit, totalPages: Math.ceil(count / limit) });
+    res.json({
+      data: rol === 'SISTEMA' ? rows.map(resumenSistema) : rows,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    });
   } catch (err) {
     errorInterno(res, 'obtener autoridades', err);
   }
@@ -93,14 +133,17 @@ router.get('/', async (req, res) => {
 
 // ── GET /autoridades/:id ─────────────────────────────────────
 router.get('/:id', async (req, res) => {
+  const rol = exigirRolConsulta(req, res);
+  if (!rol) return;
+
   try {
     const autoridad = await Autoridad.findByPk(req.params.id);
     if (!autoridad) return res.status(404).json({ error: 'Autoridad no encontrada', code: 'NO_ENCONTRADO' });
 
-    if (esOperadorDeOtroDistrito(req, autoridad.id_distrito)) {
+    if (rol === 'OPERADOR' && esOperadorDeOtroDistrito(req, autoridad.id_distrito)) {
       return res.status(403).json({ error: 'La autoridad pertenece a otro distrito', code: 'DISTRITO_AJENO' });
     }
-    res.json({ data: autoridad });
+    res.json({ data: rol === 'SISTEMA' ? resumenSistema(autoridad) : autoridad });
   } catch (err) {
     errorInterno(res, 'obtener autoridad', err);
   }

@@ -7,14 +7,14 @@ const ESCRITURA = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 const REGLAS = [
   // Uso interno entre microservicios: nunca se expone al cliente
-  { metodos: '*',       ruta: /^\/autoridades\/notificaciones/, bloquear: 404 },
+  { metodos: '*',       ruta: /^\/autoridades\/notificaciones/i, bloquear: 404 },
   // Auditoría: solo lectura, solo Administrador. El POST lo hace el propio gateway.
-  { metodos: ['GET'],   ruta: /^\/logs(\/|$)/,       roles: ADMIN },
-  { metodos: '*',       ruta: /^\/logs(\/|$)/,       bloquear: 405 },
+  { metodos: ['GET'],   ruta: /^\/logs(\/|$)/i,       roles: ADMIN },
+  { metodos: '*',       ruta: /^\/logs(\/|$)/i,       bloquear: 405 },
   // Gestión de usuarios operadores
-  { metodos: '*',       ruta: /^\/usuarios(\/|$)/,   roles: ADMIN },
+  { metodos: '*',       ruta: /^\/usuarios(\/|$)/i,   roles: ADMIN },
   // Alta / modificación de distritos
-  { metodos: ESCRITURA, ruta: /^\/distritos(\/|$)/,  roles: ADMIN },
+  { metodos: ESCRITURA, ruta: /^\/distritos(\/|$)/i,  roles: ADMIN },
 ];
 
 const coincide = (regla, req) =>

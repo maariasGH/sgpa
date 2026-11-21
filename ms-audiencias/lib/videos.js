@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 const multer = require('multer');
@@ -7,6 +8,7 @@ const { ErrorHttp } = require('./errores');
 // (volumen de Docker) y la columna AUDIENCIA.video guarda solo el nombre.
 const VIDEOS_DIR = path.resolve(process.env.VIDEOS_DIR || path.join(__dirname, '..', 'videos'));
 const MAX_MB     = parseInt(process.env.VIDEO_MAX_MB) || 2048;
+const VIDEO_URL_TTL_SECONDS = 15 * 60;
 
 fs.mkdirSync(VIDEOS_DIR, { recursive: true });
 
@@ -38,6 +40,33 @@ const tieneFirmaMp4 = async (ruta) => {
 
 const rutaVideo = (nombre) => path.join(VIDEOS_DIR, path.basename(nombre));
 
+const firmarUrlVideo = (idAudiencia, alcance = 'private') => {
+  const exp = Math.floor(Date.now() / 1000) + VIDEO_URL_TTL_SECONDS;
+  const sig = crypto.createHmac('sha256', process.env.INTERNAL_API_KEY)
+    .update(alcance === 'public' ? `public:${idAudiencia}:${exp}` : `${idAudiencia}:${exp}`)
+    .digest('hex');
+  return { exp, sig, alcance };
+};
+
+const validarFirmaVideo = (idAudiencia, exp, sig, alcance = 'private') => {
+  if (!['private', 'public'].includes(alcance)) return false;
+  if (typeof exp !== 'string' || !/^\d+$/.test(exp) || typeof sig !== 'string' || !/^[a-f\d]{64}$/i.test(sig)) {
+    return false;
+  }
+
+  const expiracion = Number(exp);
+  const ahora = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(expiracion) || expiracion <= ahora || expiracion > ahora + VIDEO_URL_TTL_SECONDS) {
+    return false;
+  }
+
+  const esperado = crypto.createHmac('sha256', process.env.INTERNAL_API_KEY)
+    .update(alcance === 'public' ? `public:${idAudiencia}:${exp}` : `${idAudiencia}:${exp}`)
+    .digest();
+  const recibido = Buffer.from(sig, 'hex');
+  return recibido.length === esperado.length && crypto.timingSafeEqual(recibido, esperado);
+};
+
 const borrarVideo = (nombre) =>
   fs.promises.unlink(rutaVideo(nombre)).catch(err => {
     if (err.code !== 'ENOENT') console.error(`No se pudo borrar el video ${nombre}:`, err.message);
@@ -66,4 +95,11 @@ const recibirVideo = (req, res) => new Promise((resolve, reject) => {
   });
 });
 
-module.exports = { recibirVideo, rutaVideo, borrarVideo };
+module.exports = {
+  recibirVideo,
+  rutaVideo,
+  borrarVideo,
+  firmarUrlVideo,
+  validarFirmaVideo,
+  VIDEO_URL_TTL_SECONDS,
+};

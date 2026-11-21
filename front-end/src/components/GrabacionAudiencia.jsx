@@ -9,23 +9,66 @@ const SIN_GRABACION = ["CANCELADA", "SUSPENDIDA"];
 
 const esMp4 = (archivo) => archivo.type === "video/mp4" || /\.mp4$/i.test(archivo.name);
 
-// Sección "Grabación" del detalle de una audiencia.
-// Público: muestra el reproductor solo si hay video (si no, no se ve nada).
-// Con `onActualizada` (Operador / Admin): además permite subir, reemplazar y quitar el MP4.
+// Sección "Grabación" del detalle. El reproductor usa una URL firmada;
+// en la vista pública la API solo informa si hay una grabación elegible.
 export default function GrabacionAudiencia({ audiencia: a, onActualizada }) {
   const gestiona = Boolean(onActualizada);
   const inputRef = useRef(null);
   const subidaRef = useRef(null);
+  const videoRef = useRef(null);
+  const posicionVideoRef = useRef({ tiempo: 0, reproducir: false });
+  const cambiandoFuenteRef = useRef(false);
   const [progreso, setProgreso] = useState(null); // null = sin subida en curso; 0..1
   const [confirmarQuitar, setConfirmarQuitar] = useState(false);
   const [quitando, setQuitando] = useState(false);
   const [error, setError] = useState("");
+  const [videoResource, setVideoResource] = useState(null);
+  const nombreVideo = a.video || (a.tiene_video ? "publico" : null);
 
   // Si se cierra el detalle con una subida en curso, se cancela
   useEffect(() => () => subidaRef.current?.cancelar(), []);
 
+  useEffect(() => {
+    let activo = true;
+    let temporizador;
+
+    if (!nombreVideo) {
+      return () => { activo = false; window.clearTimeout(temporizador); };
+    }
+
+    const solicitarUrl = async (inicial = false) => {
+      try {
+        if (inicial) {
+          setError("");
+        }
+        const { url, expiresIn } = await sgpa.urlVideoAudiencia(a.id_audiencia);
+        if (!activo) return;
+
+        const video = videoRef.current;
+        posicionVideoRef.current = {
+          tiempo: video?.currentTime ?? 0,
+          reproducir: Boolean(video && !video.paused),
+        };
+        cambiandoFuenteRef.current = true;
+        setVideoResource({ id: a.id_audiencia, nombre: nombreVideo, url });
+        temporizador = window.setTimeout(
+          () => solicitarUrl(),
+          Math.max(1000, expiresIn - 60_000),
+        );
+      } catch (err) {
+        if (activo) setError(mensajeError(err));
+      }
+    };
+
+    solicitarUrl(true);
+    return () => {
+      activo = false;
+      window.clearTimeout(temporizador);
+    };
+  }, [a.id_audiencia, nombreVideo]);
+
   const puedeSubir = gestiona && !SIN_GRABACION.includes(a.estado);
-  if (!a.video && !puedeSubir) return null;
+  if (!nombreVideo && !puedeSubir) return null;
 
   const elegirArchivo = async (e) => {
     const archivo = e.target.files?.[0];
@@ -61,6 +104,8 @@ export default function GrabacionAudiencia({ audiencia: a, onActualizada }) {
 
   const subiendo = progreso !== null;
   const porcentaje = Math.round((progreso ?? 0) * 100);
+  const puedeVerVideo = Boolean(nombreVideo && videoResource?.id === a.id_audiencia
+    && videoResource.nombre === nombreVideo);
 
   return (
     <div style={{ marginBottom:20 }}>
@@ -71,17 +116,35 @@ export default function GrabacionAudiencia({ audiencia: a, onActualizada }) {
 
       {error && <Alert type="error">{error}</Alert>}
 
-      {a.video && (
+      {puedeVerVideo && (
         <video
-          key={a.video}
+          ref={videoRef}
           controls
           preload="metadata"
-          src={sgpa.urlVideoAudiencia(a)}
+          src={videoResource.url}
+          referrerPolicy="no-referrer"
           aria-label={`Grabación de la audiencia ${a.cuij}`}
+          onPlay={() => { posicionVideoRef.current.reproducir = true; }}
+          onPause={() => {
+            if (!cambiandoFuenteRef.current) posicionVideoRef.current.reproducir = false;
+          }}
+          onLoadedMetadata={() => {
+            const video = videoRef.current;
+            if (!video) return;
+            const { tiempo, reproducir } = posicionVideoRef.current;
+            if (tiempo > 0 && Number.isFinite(video.duration)) {
+              video.currentTime = Math.min(tiempo, video.duration);
+            }
+            cambiandoFuenteRef.current = false;
+            if (reproducir) video.play().catch(() => {});
+          }}
           style={{ display:"block", width:"100%", maxHeight:280, background:"#000", borderRadius:8, marginBottom: gestiona ? 10 : 0 }}
         >
           Tu navegador no puede reproducir este video.
         </video>
+      )}
+      {nombreVideo && !puedeVerVideo && !error && (
+        <div style={{ fontSize:13, color:C.muted, marginBottom:10 }}>Preparando acceso seguro a la grabación…</div>
       )}
 
       {gestiona && (

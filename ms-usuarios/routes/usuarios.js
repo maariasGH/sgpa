@@ -3,6 +3,8 @@ const bcrypt  = require('bcrypt');
 const { Op }  = require('sequelize');
 const { Usuario, Rol } = require('../models');
 const { notificarAlta, notificarBaja, notificarReactivacion } = require('../lib/notificaciones');
+const { fetchT } = require('../lib/http');
+const headersInternos = { 'x-internal-key': process.env.INTERNAL_API_KEY };
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ const errorUnico = (res, err) => {
 
 // Devuelve el distrito si existe y está activo; si no, null
 const obtenerDistritoActivo = async (id_distrito) => {
-  const resp = await fetch(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`);
+  const resp = await fetchT(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`, { headers: headersInternos });
   if (!resp.ok) return null;
   const body = await resp.json();
   const distrito = body.data ?? body;
@@ -153,6 +155,7 @@ router.post('/', async (req, res) => {
     const nuevo = await Usuario.create({
       username,
       password_hash: await bcrypt.hash(String(password), BCRYPT_ROUNDS),
+      debe_cambiar_password: true,
       nombre:        String(nombre).trim(),
       dni:           parseInt(dni),
       email:         email.trim(),
@@ -161,7 +164,7 @@ router.post('/', async (req, res) => {
     });
 
     const creado = await Usuario.findByPk(nuevo.id_usuario, { attributes: SIN_PASSWORD, include: INCLUDE_ROL });
-    notificarAlta(creado, distrito.nombre);
+    notificarAlta(creado, distrito.nombre, password);
     res.status(201).json({ data: serializar(creado), message: 'Operador creado' });
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') return errorUnico(res, err);

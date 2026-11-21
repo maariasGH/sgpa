@@ -46,7 +46,7 @@ export default function Panel() {
   const pestanias = PESTANIAS.filter(p => esAdmin || !p.soloAdmin);
 
   // Primero se sale a la vista pública; si no, RequiereSesion mandaría al login
-  const salir = () => { navigate("/"); cerrarSesion(); };
+  const salir = () => { cerrarSesion(); navigate("/"); };
 
   const nav = (
     <nav aria-label="Secciones del panel" className="nav-scroll" style={{ flex:1, display:"flex", gap:2, minWidth:0 }}>

@@ -12,9 +12,10 @@ export function AuthProvider({ children }) {
   const [sesion, setSesion] = useState(null); // { token, usuario }
 
   const cerrarSesion = useCallback(async ({ avisarServidor = true } = {}) => {
-    if (avisarServidor) await sgpa.logout().catch(() => {});
+    const logout = avisarServidor ? sgpa.logout().catch(() => {}) : Promise.resolve();
     setToken(null);
     setSesion(null);
+    await logout;
   }, []);
 
   const iniciarSesion = useCallback(async (username, password) => {
@@ -22,6 +23,11 @@ export function AuthProvider({ children }) {
     setToken(token);
     setSesion({ token, usuario });
     return usuario;
+  }, []);
+
+  const completarCambioPassword = useCallback(({ token, usuario }) => {
+    setToken(token);
+    setSesion({ token, usuario });
   }, []);
 
   // Si la API responde 401 (token vencido) se cierra la sesión local
@@ -35,23 +41,28 @@ export function AuthProvider({ children }) {
   // Renovación periódica del token mientras haya sesión
   useEffect(() => {
     if (!sesion) return undefined;
+    let vigente = true;
     const t = setInterval(async () => {
       try {
         const { token } = await sgpa.refresh();
-        setToken(token);
+        if (vigente) setToken(token);
       } catch {
-        cerrarSesion({ avisarServidor: false });
+        if (vigente) cerrarSesion({ avisarServidor: false });
       }
     }, RENOVAR_CADA_MS);
-    return () => clearInterval(t);
+    return () => {
+      vigente = false;
+      clearInterval(t);
+    };
   }, [sesion, cerrarSesion]);
 
   const valor = useMemo(() => ({
     usuario:   sesion?.usuario ?? null,
     esAdmin:   sesion?.usuario?.rol === "ADMINISTRADOR",
     iniciarSesion,
+    completarCambioPassword,
     cerrarSesion,
-  }), [sesion, iniciarSesion, cerrarSesion]);
+  }), [sesion, iniciarSesion, completarCambioPassword, cerrarSesion]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }

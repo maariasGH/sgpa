@@ -17,6 +17,7 @@ const traerTodo = async (path, params, limit) => {
 export const login   = (username, password) => api.post("/auth/login", { username, password });
 export const refresh = () => api.post("/auth/refresh");
 export const logout  = () => api.post("/auth/logout");
+export const cambiarPasswordInicial = (password) => api.post("/auth/cambiar-password", { password });
 
 // ── Catálogos ────────────────────────────────────────────────
 export const listarDistritos = () => api.get("/distritos");
@@ -32,6 +33,7 @@ export const listarTodasLasAudiencias = (params) => traerTodo("/audiencias", par
 export const audienciasTV       = (id_distrito) => api.get("/audiencias/tv", { id_distrito });
 export const crearAudiencia     = (datos) => api.post("/audiencias", datos);
 export const modificarAudiencia = (id, datos) => api.put(`/audiencias/${id}`, datos);
+export const cambiarPublicacion = (id, reservada) => api.patch(`/audiencias/${id}/publicacion`, { reservada });
 export const cambiarEstado      = (id, estado, motivo) => api.patch(`/audiencias/${id}/estado`, { estado, motivo });
 // EN_HORARIO / DEMORADA cuyo horario de fin ya pasó → REALIZADA (del distrito del operador, o todas si es Admin)
 export const finalizarVencidas  = () => api.patch("/audiencias/finalizar-vencidas", {});
@@ -39,9 +41,11 @@ export const finalizarVencidas  = () => api.patch("/audiencias/finalizar-vencida
 export const estadisticas       = (params) => api.get("/audiencias/stats", params).then(r => r.data);
 export const exportarExcel      = (params) => api.blob("/audiencias/stats/export", params);
 
-// Grabación (MP4) de una audiencia. Ver la URL es público; subir / quitar requiere sesión.
-// `a.video` (nombre del archivo) va en la URL para que al reemplazarlo no se use el video viejo del caché.
-export const urlVideoAudiencia = (a) => urlApi(`/audiencias/${a.id_audiencia}/video?v=${encodeURIComponent(a.video)}`);
+// El reproductor no puede enviar el JWT: solicita una URL firmada de vida corta.
+export const urlVideoAudiencia = async (id) => {
+  const { data } = await api.get(`/audiencias/${id}/video-url`);
+  return { url: urlApi(data.url), expiresIn: data.expires_in * 1000 };
+};
 // Devuelve { promesa, cancelar }; la promesa resuelve { data: audiencia actualizada }
 export const subirVideoAudiencia  = (id, archivo, onProgreso) => api.subir(`/audiencias/${id}/video`, "video", archivo, onProgreso);
 export const quitarVideoAudiencia = (id) => api.delete(`/audiencias/${id}/video`);

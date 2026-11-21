@@ -8,8 +8,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5434:5432"
     volumes:
       - ./bd:/docker-entrypoint-initdb.d
       - pgdata:/var/lib/postgresql/data
@@ -30,9 +28,8 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # URL del gateway vista desde el navegador (no desde el contenedor).
-      # Vacía = mismo host que abrió la página, puerto 3010 (sirve para PC y teléfono en la LAN)
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:3010}
+      # El navegador usa el mismo origen; Vite reenvía /api al gateway por la red Docker.
+      - GATEWAY_PROXY_TARGET=http://gateway:3000
       # Detecta cambios en el código montado desde Windows (sin esto Vite sirve versiones viejas)
       - VITE_POLLING=true
     command: sh -c "npm install && npm run dev -- --host"
@@ -45,6 +42,8 @@ services:
     container_name: sgpa_gateway
     volumes:
       - ./gateway:/app
+      - ./common:/common:ro
+      - audit_queue:/data/audit
     ports:
       - "3010:3000"
     environment:
@@ -68,10 +67,20 @@ services:
       - DEBUG_TOKEN_OP=${DEBUG_TOKEN_OP}
       # Orígenes permitidos separados por coma. En development la red local (teléfono) se acepta sola
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - AUDIT_QUEUE_FILE=/data/audit/pending.jsonl
     command: sh -c "npm install && npm run dev"
+    restart: unless-stopped
+    stop_grace_period: 35s
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS DISTRITOS ─────────────────────────────────────────────
   ms-distritos:
@@ -81,8 +90,9 @@ services:
     container_name: sgpa_ms_distritos
     volumes:
       - ./ms-distritos:/app
-    ports:
-      - "3001:3001"
+      - ./common:/common:ro
+    expose: ["3001"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -91,10 +101,17 @@ services:
       - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_distritos
       - PORT=3001
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS SALAS ─────────────────────────────────────────────────
   ms-salas:
@@ -104,8 +121,9 @@ services:
     container_name: sgpa_ms_salas
     volumes:
       - ./ms-salas:/app
-    ports:
-      - "3002:3002"
+      - ./common:/common:ro
+    expose: ["3002"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -115,10 +133,17 @@ services:
       - DB_SCHEMA=sgpa_salas
       - MS_DISTRITOS_URL=http://ms-distritos:3001
       - PORT=3002
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS AUTORIDADES ───────────────────────────────────────────
   ms-autoridades:
@@ -128,8 +153,9 @@ services:
     container_name: sgpa_ms_autoridades
     volumes:
       - ./ms-autoridades:/app
-    ports:
-      - "3003:3003"
+      - ./common:/common:ro
+    expose: ["3003"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -148,10 +174,17 @@ services:
       # Dirección de contacto que figura al pie de los emails a autoridades
       - SOPORTE_EMAIL=${SOPORTE_EMAIL:-}
       - PORT=3003
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS USUARIOS ──────────────────────────────────────────────
   ms-usuarios:
@@ -161,8 +194,9 @@ services:
     container_name: sgpa_ms_usuarios
     volumes:
       - ./ms-usuarios:/app
-    ports:
-      - "3004:3004"
+      - ./common:/common:ro
+    expose: ["3004"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -180,10 +214,17 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=5m
       - PORT=3004
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS AUDIENCIAS ─────────────────────────────────────────────
   ms-audiencias:
@@ -193,10 +234,11 @@ services:
     container_name: sgpa_ms_audiencias
     volumes:
       - ./ms-audiencias:/app
+      - ./common:/common:ro
       # Grabaciones (MP4) de las audiencias
       - videos:/videos
-    ports:
-      - "3005:3005"
+    expose: ["3005"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -211,10 +253,18 @@ services:
       # Tamaño máximo de una grabación en MB
       - VIDEO_MAX_MB=${VIDEO_MAX_MB:-2048}
       - PORT=3005
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    stop_grace_period: 35s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
   # ── MS AUDITORIA ──────────────────────────────────────────────
   ms-auditoria:
@@ -224,8 +274,9 @@ services:
     container_name: sgpa_ms_auditoria
     volumes:
       - ./ms-auditoria:/app
-    ports:
-      - "3006:3006"
+      - ./common:/common:ro
+    expose: ["3006"]
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -234,15 +285,24 @@ services:
       - DB_NAME=${POSTGRES_DB}
       - DB_SCHEMA=sgpa_auditoria
       - PORT=3006
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     command: sh -c "npm install && npm run dev"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/health', { signal: AbortSignal.timeout(2000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
 
 # ── VOLÚMENES ────────────────────────────────────────────────
 # Datos persistentes de PostgreSQL. Los scripts de bd/ solo corren si está vacío:
 # para re-inicializar la base: docker compose down -v
 volumes:
   pgdata:
+  # Logs pendientes del gateway; se conserva entre recreaciones del servicio.
+  audit_queue:
   # Grabaciones de audiencias subidas desde el panel (ms-audiencias)
   videos:

@@ -1,5 +1,7 @@
-const fetch = require('node-fetch');
+const { Readable } = require('node:stream');
 const { headersUsuario } = require('./middleware/audit');
+const { MS } = require('./servicios');
+const { llamar } = require('./lib/llamadas');
 
 // Headers de la respuesta de un archivo que se reenvían al cliente.
 // content-range / accept-ranges permiten adelantar un video sin descargarlo entero.
@@ -28,6 +30,7 @@ const proxy = async (req, res) => {
     const options = {
       method:  req.method,
       headers: {
+        'x-internal-key': process.env.INTERNAL_API_KEY,
         'Content-Type': esMultipart ? req.headers['content-type'] : 'application/json',
         ...(esMultipart && req.headers['content-length'] && { 'Content-Length': req.headers['content-length'] }),
         // Pedidos parciales del reproductor de video
@@ -46,7 +49,19 @@ const proxy = async (req, res) => {
       options.body = JSON.stringify(req.body ?? {});
     }
 
-    const respuesta = await fetch(url, options);
+    const esVideoEnStream = /^\/audiencias\/\d+\/video\/?$/i.test(req.path)
+      && (req.method === 'GET' || esMultipart);
+    const timeoutMs = esVideoEnStream ? 60 * 60 * 1000 : 5000;
+    const nombreServicio = Object.entries(MS).find(([, destino]) => destino === base)?.[0]
+      || req.servicio.recurso;
+    const opcionesFetch = esMultipart ? { ...options, duplex: 'half' } : options;
+    const respuesta = await llamar(
+      nombreServicio,
+      url,
+      opcionesFetch,
+      timeoutMs,
+      esMultipart ? globalThis.fetch : undefined,
+    );
     const tipo = respuesta.headers.get('content-type') || '';
 
     if (tipo.includes('application/json')) {
@@ -55,17 +70,36 @@ const proxy = async (req, res) => {
 
     // Respuesta no JSON (archivo): se reenvía como stream, sin cargarla en memoria
     res.status(respuesta.status);
+    if (req.method === 'GET' && /^\/audiencias\/\d+\/video\/?$/i.test(req.path)) {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
     for (const header of HEADERS_ARCHIVO) {
       const valor = respuesta.headers.get(header);
       if (valor) res.setHeader(header, valor);
     }
+    const cuerpoRespuesta = typeof respuesta.body.pipe === 'function'
+      ? respuesta.body
+      : Readable.fromWeb(respuesta.body);
+    cuerpoRespuesta.on('error', err => {
+      console.error(`Error transmitiendo respuesta de ${base}:`, err.message);
+      if (res.headersSent) return res.destroy(err);
+      for (const header of HEADERS_ARCHIVO) res.removeHeader(header);
+      res.status(503).json({ error: 'Microservicio no disponible', code: 'SERVICIO_NO_DISPONIBLE' });
+    });
     // Si el cliente corta (ej: adelanta el video) se corta también la descarga del microservicio
-    res.on('close', () => respuesta.body.destroy());
-    respuesta.body.pipe(res);
+    res.on('close', () => cuerpoRespuesta.destroy());
+    cuerpoRespuesta.pipe(res);
 
   } catch (err) {
     console.error(`Error en proxy hacia ${base}:`, err.message);
     if (res.headersSent) return res.end();
+    if (err.code === 'EOPENBREAKER') {
+      res.setHeader('Retry-After', '10');
+      return res.status(503).json({
+        error: 'El servicio está recuperándose; intentá nuevamente en unos segundos',
+        code: 'CIRCUITO_ABIERTO',
+      });
+    }
     return res.status(503).json({ error: 'Microservicio no disponible', code: 'SERVICIO_NO_DISPONIBLE' });
   }
 };

@@ -8,5 +8,7 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Cola persistente de auditoría en desarrollo local
+gateway/data/
 # Grabaciones de audiencias subidas en desarrollo local (en Docker van al volumen "videos")
 ms-audiencias/videos/

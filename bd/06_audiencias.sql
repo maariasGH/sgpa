@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS AUDIENCIA (
     id_estado        INT           NOT NULL REFERENCES ESTADO_AUDIENCIA(id_estado),
 
     motivo_cambio    TEXT,                     -- obligatorio si estado es CANCELADA o SUSPENDIDA
+    reservada        BOOLEAN       NOT NULL DEFAULT TRUE,
 
     created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),

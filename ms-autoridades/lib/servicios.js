@@ -1,7 +1,10 @@
 // Comunicación HTTP con otros microservicios (nunca se consulta otro schema directamente)
 
+const { fetchT } = require('./http');
+
 const MS_DISTRITOS_URL  = process.env.MS_DISTRITOS_URL  || 'http://localhost:3001';
 const MS_AUDIENCIAS_URL = process.env.MS_AUDIENCIAS_URL || 'http://localhost:3005';
+const headersInternos  = { 'x-internal-key': process.env.INTERNAL_API_KEY };
 const ZONA_HORARIA      = process.env.APP_TIMEZONE      || 'America/Argentina/Buenos_Aires';
 
 // Fecha de hoy (YYYY-MM-DD) en la zona horaria del Poder Judicial
@@ -10,7 +13,7 @@ const hoy = () =>
 
 // Devuelve el distrito o null si no existe
 const obtenerDistrito = async (id_distrito) => {
-  const resp = await fetch(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`);
+  const resp = await fetchT(`${MS_DISTRITOS_URL}/distritos/${id_distrito}`, { headers: headersInternos });
   if (resp.status === 404) return null;
   if (!resp.ok) throw new Error(`ms-distritos respondió ${resp.status}`);
   const body = await resp.json();
@@ -32,7 +35,7 @@ const contarAudienciasFuturas = async (id_autoridad) => {
     activas:      'true',
     limit:        '1',
   });
-  const resp = await fetch(`${MS_AUDIENCIAS_URL}/audiencias?${params}`);
+  const resp = await fetchT(`${MS_AUDIENCIAS_URL}/audiencias?${params}`, { headers: headersInternos });
   if (!resp.ok) throw new Error(`ms-audiencias respondió ${resp.status}`);
   const body = await resp.json();
   return body.total ?? 0;

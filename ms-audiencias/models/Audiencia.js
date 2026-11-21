@@ -50,6 +50,11 @@ const Audiencia = sequelize.define('Audiencia', {
     type:      DataTypes.TEXT,
     allowNull: true,
   },
+  reservada: {
+    type:         DataTypes.BOOLEAN,
+    allowNull:    false,
+    defaultValue: true,
+  },
   // Nombre del archivo MP4 de la grabación en VIDEOS_DIR (NULL = sin grabación)
   video: {
     type:      DataTypes.STRING(255),

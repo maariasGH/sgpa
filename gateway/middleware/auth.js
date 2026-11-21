@@ -1,6 +1,6 @@
-const fetch = require('node-fetch');
-
-const MS_USUARIOS_URL = process.env.MS_USUARIOS_URL || 'http://localhost:3004';
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const VIDEO_URL_TTL_SECONDS = 15 * 60;
 
 // Rutas que NO requieren autenticación (paths relativos a /api).
 // Se comparan con regex exactas: con startsWith, GET /audiencias/stats quedaba público.
@@ -9,7 +9,7 @@ const RUTAS_PUBLICAS = [
   { method: 'GET',  path: /^\/audiencias\/?$/ },          // vista pública del calendario
   { method: 'GET',  path: /^\/audiencias\/tv\/?$/ },      // vista televisor
   { method: 'GET',  path: /^\/audiencias\/\d+\/?$/ },     // detalle de una audiencia
-  { method: 'GET',  path: /^\/audiencias\/\d+\/video\/?$/ }, // grabación de la audiencia
+  { method: 'GET',  path: /^\/audiencias\/\d+\/video-url\/?$/ }, // el MS valida si puede emitirse públicamente
   { method: 'GET',  path: /^\/distritos(\/\d+)?\/?$/ },   // desplegables
   { method: 'GET',  path: /^\/salas(\/\d+)?\/?$/ },       // filtro por sala del calendario
 ];
@@ -18,6 +18,30 @@ const esRutaPublica = (method, path) => {
   return RUTAS_PUBLICAS.some(ruta =>
     ruta.method === method && ruta.path.test(path)
   );
+};
+
+const esVideoFirmado = (req) => {
+  const coincidencia = /^\/audiencias\/(\d+)\/video\/?$/i.exec(req.path);
+  const { exp, sig } = req.query;
+  const alcance = req.query.scope ?? 'private';
+  const key = process.env.INTERNAL_API_KEY;
+  if (!coincidencia || !key || typeof exp !== 'string' || !/^\d+$/.test(exp)
+    || !['private', 'public'].includes(alcance)
+    || typeof sig !== 'string' || !/^[a-f\d]{64}$/i.test(sig)) {
+    return false;
+  }
+
+  const expiracion = Number(exp);
+  const ahora = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(expiracion) || expiracion <= ahora || expiracion > ahora + VIDEO_URL_TTL_SECONDS) {
+    return false;
+  }
+
+  const esperado = crypto.createHmac('sha256', key)
+    .update(alcance === 'public' ? `public:${coincidencia[1]}:${exp}` : `${coincidencia[1]}:${exp}`)
+    .digest();
+  const recibido = Buffer.from(sig, 'hex');
+  return recibido.length === esperado.length && crypto.timingSafeEqual(recibido, esperado);
 };
 
 // Los debug tokens saltean la verificación real del JWT, así que solo se aceptan
@@ -40,8 +64,7 @@ const DEBUG_TOKEN    = debugToken('DEBUG_TOKEN');
 const DEBUG_TOKEN_OP = debugToken('DEBUG_TOKEN_OP');
 
 // Devuelve el usuario del token, o null si el token no es válido.
-// Lanza error si ms-usuarios no responde.
-const identificar = async (token) => {
+const identificar = (token) => {
   // ── Debug token de Administrador (solo en desarrollo) ────────
   if (DEBUG_TOKEN && token === DEBUG_TOKEN) {
     console.warn('⚠️  Usando DEBUG_TOKEN — no usar en producción');
@@ -50,6 +73,7 @@ const identificar = async (token) => {
       username:    'debug',
       rol:         'ADMINISTRADOR',  // debug siempre es admin
       id_distrito: null,
+      debe_cambiar_password: false,
     };
   }
 
@@ -61,29 +85,44 @@ const identificar = async (token) => {
       username:    'debug_op',
       rol:         'OPERADOR',  // debug_op siempre es operador
       id_distrito: 2,           // 1 = Santa Fe, 2 = Rosario
+      debe_cambiar_password: false,
     };
   }
 
-  // Le pregunta al ms-usuarios si el token es válido
-  const resp = await fetch(`${MS_USUARIOS_URL}/auth/verificar`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  const data = await resp.json();
-  return data.valido ? data.usuario : null;
+  try {
+    const datos = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    if (!Number.isSafeInteger(datos.id_usuario)
+      || typeof datos.username !== 'string'
+      || !['ADMINISTRADOR', 'OPERADOR'].includes(datos.rol)
+      || (datos.rol === 'OPERADOR' && !Number.isSafeInteger(datos.id_distrito))) {
+      return null;
+    }
+    return {
+      id_usuario: datos.id_usuario,
+      username: datos.username,
+      rol: datos.rol,
+      id_distrito: datos.id_distrito,
+      debe_cambiar_password: datos.debe_cambiar_password === true,
+    };
+  } catch {
+    return null;
+  }
 };
 
 const verificarToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // "Bearer <token>"
 
+  if (req.method === 'GET' && esVideoFirmado(req)) return next();
+
   // Ruta pública: pasa siempre. Si además viene un token válido se identifica
   // al usuario, para que el control por distrito siga aplicando al operador.
   if (esRutaPublica(req.method, req.path)) {
     if (token) {
       try {
-        req.usuario = (await identificar(token)) || undefined;
+        req.usuario = identificar(token) || undefined;
       } catch (err) {
-        console.error('Error verificando token:', err.message);
+        console.error('Error identificando usuario:', err.message);
       }
     }
     return next();
@@ -94,7 +133,7 @@ const verificarToken = async (req, res, next) => {
   }
 
   try {
-    const usuario = await identificar(token);
+    const usuario = identificar(token);
     if (!usuario) {
       return res.status(401).json({ error: 'Token inválido o expirado' });
     }
@@ -104,8 +143,8 @@ const verificarToken = async (req, res, next) => {
     next();
 
   } catch (err) {
-    console.error('Error verificando token:', err.message);
-    return res.status(503).json({ error: 'Servicio de autenticación no disponible' });
+    console.error('Error identificando usuario:', err.message);
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
 

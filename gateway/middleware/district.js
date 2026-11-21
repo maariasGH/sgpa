@@ -9,13 +9,15 @@ const ESCRITURA = ['POST', 'PUT', 'PATCH'];
 
 // Listados cuyo filtro de distrito se fuerza para el operador
 const LISTADOS_POR_DISTRITO = [
-  /^\/salas\/?$/,
-  /^\/autoridades\/?$/,
-  /^\/audiencias\/stats(\/export)?\/?$/,
+  /^\/salas\/?$/i,
+  /^\/autoridades\/?$/i,
+  /^\/audiencias\/?$/i,
+  /^\/audiencias\/tv\/?$/i,
+  /^\/audiencias\/stats(\/export)?\/?$/i,
 ];
 
 // Altas donde se completa el distrito si no viene en el body
-const ALTAS_CON_DISTRITO = [/^\/salas\/?$/, /^\/autoridades\/?$/];
+const ALTAS_CON_DISTRITO = [/^\/salas\/?$/i, /^\/autoridades\/?$/i];
 
 const verificarDistrito = (req, res, next) => {
   if (!req.usuario || req.usuario.rol !== 'OPERADOR') return next();

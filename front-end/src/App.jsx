@@ -3,6 +3,7 @@ import { useAuth } from "./hooks/useAuth";
 import VistaPublica from "./pages/VistaPublica";
 import Login from "./pages/Login";
 import Panel from "./pages/Panel";
+import CambiarPassword from "./pages/CambiarPassword";
 
 // Rutas:
 //   /                  calendario público (?fecha=YYYY-MM-DD y filtros en la URL)
@@ -14,6 +15,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<VistaPublica />} />
       <Route path="/login" element={<SoloSinSesion><Login /></SoloSinSesion>} />
+      <Route path="/primer-acceso" element={<RequiereSesion><CambiarPassword /></RequiereSesion>} />
       <Route path="/panel/*" element={<RequiereSesion><Panel /></RequiereSesion>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -25,6 +27,12 @@ function RequiereSesion({ children }) {
   const { usuario } = useAuth();
   const location = useLocation();
   if (!usuario) return <Navigate to="/login" replace state={{ desde: location.pathname + location.search }} />;
+  if (usuario.debe_cambiar_password && location.pathname !== "/primer-acceso") {
+    return <Navigate to="/primer-acceso" replace />;
+  }
+  if (!usuario.debe_cambiar_password && location.pathname === "/primer-acceso") {
+    return <Navigate to="/panel" replace />;
+  }
   return children;
 }
 
@@ -32,6 +40,6 @@ function RequiereSesion({ children }) {
 function SoloSinSesion({ children }) {
   const { usuario } = useAuth();
   const location = useLocation();
-  if (usuario) return <Navigate to={location.state?.desde ?? "/panel"} replace />;
+  if (usuario) return <Navigate to={usuario.debe_cambiar_password ? "/primer-acceso" : location.state?.desde ?? "/panel"} replace />;
   return children;
 }

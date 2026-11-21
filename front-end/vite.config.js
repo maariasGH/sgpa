@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
+const gatewayProxyTarget = process.env.GATEWAY_PROXY_TARGET || 'http://localhost:3010'
+
 export default defineConfig({
   plugins: [react()],
   // host: true escucha en todas las interfaces (no solo localhost) para poder abrir
@@ -11,6 +13,12 @@ export default defineConfig({
   // con VITE_POLLING=true (lo define docker-compose) Vite revisa los archivos periódicamente.
   server: {
     host: true, port: 5173, strictPort: true,
+    proxy: {
+      '/api': {
+        target: gatewayProxyTarget,
+        changeOrigin: true,
+      },
+    },
     watch: process.env.VITE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
   },
   preview: { host: true, port: 5173 },

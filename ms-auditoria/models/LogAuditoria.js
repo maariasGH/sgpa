@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-const TIPOS_ACCION = ['ALTA', 'MODIFICACION', 'BAJA', 'LOGIN', 'LOGOUT'];
+const TIPOS_ACCION = ['ALTA', 'MODIFICACION', 'BAJA', 'LOGIN', 'LOGOUT', 'LOGIN_FALLIDO'];
 
 const LogAuditoria = sequelize.define('LogAuditoria', {
   id_log: {
@@ -11,7 +11,7 @@ const LogAuditoria = sequelize.define('LogAuditoria', {
   },
   id_usuario: {
     type:      DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
   },
   tipo_accion: {
     type:      DataTypes.ENUM(...TIPOS_ACCION),

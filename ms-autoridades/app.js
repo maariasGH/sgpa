@@ -4,6 +4,7 @@ const autoridadesRoutes = require('./routes/autoridades');
 
 const app = express();
 
+app.use(require('./lib/interno'));
 app.use(express.json());
 
 // ── Rutas ────────────────────────────────────────────────────

@@ -17,6 +17,11 @@ const Usuario = sequelize.define('Usuario', {
     type:      DataTypes.STRING(255),
     allowNull: false,
   },
+  debe_cambiar_password: {
+    type:         DataTypes.BOOLEAN,
+    allowNull:    false,
+    defaultValue: false,
+  },
   nombre: {
     type:      DataTypes.STRING(200),
     allowNull: false,

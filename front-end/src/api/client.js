@@ -1,10 +1,9 @@
 // Cliente HTTP del API Gateway.
 // El JWT vive solo en memoria (nunca en localStorage): AuthProvider lo registra acá.
 
-// Sin VITE_API_URL se usa el mismo host desde el que se abrió la página (puerto 3000):
-// así funciona tanto en la PC (localhost) como desde un teléfono en la red local (IP de la PC).
+// Sin VITE_API_URL, las solicitudes usan el mismo origen y Vite las reenvía al gateway.
 // (`?.` porque fuera de Vite —en los tests— import.meta.env no existe)
-const API_URL = import.meta.env?.VITE_API_URL ||`${window.location.protocol}//${window.location.hostname}:3000`;
+const API_URL = import.meta.env?.VITE_API_URL?.replace(/\/$/, "") || "";
 const BASE = `${API_URL}/api`;
 
 let tokenActual = null;

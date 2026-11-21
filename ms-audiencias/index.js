@@ -1,5 +1,6 @@
 const app = require('./app');
 const { sequelize } = require('./models');
+const instalarCicloDeVida = require('../common/lifecycle');
 
 const PORT = process.env.PORT || 3005;
 
@@ -17,3 +18,8 @@ const server = app.listen(PORT, async () => {
 
 // La subida de una grabación (video MP4) puede tardar más que el límite por defecto de Node (5 min)
 server.requestTimeout = 60 * 60 * 1000;
+instalarCicloDeVida(server, {
+  nombre: 'ms-audiencias',
+  cerrarRecursos: () => sequelize.close(),
+  tiempoCierreMs: 30_000,
+});

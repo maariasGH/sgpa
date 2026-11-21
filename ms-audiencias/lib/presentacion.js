@@ -1,4 +1,4 @@
-const { obtenerSalas, obtenerAutoridades } = require('./servicios');
+const { obtenerSalasCacheadas, obtenerAutoridadesCacheadas } = require('./servicios');
 
 // Datos públicos de una autoridad (sin DNI, email ni teléfono)
 const resumenAutoridad = (a) => a && {
@@ -15,6 +15,22 @@ const resumenSala = (s) => s && {
   id_distrito: s.id_distrito,
 };
 
+const esAudienciaPublica = (a, sala = a.sala) =>
+  a.reservada === false && Boolean(sala?.tipo) && sala.tipo.toUpperCase() !== 'GESELL';
+
+const tieneVideoPublico = (a, sala = a.sala) =>
+  Boolean(a.video) && esAudienciaPublica(a, sala);
+
+const publica = (a) => {
+  const oculta = !esAudienciaPublica(a);
+  const { id_usuario_carga, motivo_cambio, video, reservada, ...resto } = a;
+  return {
+    ...resto,
+    caratula: oculta ? 'Causa reservada' : a.caratula,
+    tiene_video: tieneVideoPublico({ ...a, video }),
+  };
+};
+
 // Agrega nombre de estado, sala, juez y fiscal a cada audiencia.
 // Si algún microservicio no responde, esos campos quedan en null (no rompe el calendario).
 const enriquecer = async (audiencias) => {
@@ -22,11 +38,11 @@ const enriquecer = async (audiencias) => {
   if (!lista.length) return [];
 
   const [salas, autoridades] = await Promise.all([
-    obtenerSalas().catch(err => {
+    obtenerSalasCacheadas().catch(err => {
       console.error('No se pudieron obtener salas:', err.message);
       return [];
     }),
-    obtenerAutoridades(lista.flatMap(a => [a.id_juez, a.id_fiscal])).catch(err => {
+    obtenerAutoridadesCacheadas(lista.flatMap(a => [a.id_juez, a.id_fiscal])).catch(err => {
       console.error('No se pudieron obtener autoridades:', err.message);
       return [];
     }),
@@ -44,4 +60,4 @@ const enriquecer = async (audiencias) => {
   }));
 };
 
-module.exports = { enriquecer };
+module.exports = { enriquecer, publica, tieneVideoPublico };

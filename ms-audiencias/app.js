@@ -5,6 +5,7 @@ const estadisticasRoutes = require('./routes/estadisticas');
 
 const app = express();
 
+app.use(require('./lib/interno'));
 app.use(express.json());
 
 // ── Rutas ────────────────────────────────────────────────────

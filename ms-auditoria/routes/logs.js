@@ -14,7 +14,8 @@ const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 router.post('/', async (req, res) => {
   const { id_usuario, tipo_accion, entidad, id_entidad, detalle, request, ip_origen } = req.body;
 
-  if (!Number.isInteger(id_usuario)) {
+  const loginFallido = tipo_accion === 'LOGIN_FALLIDO' && id_usuario === null;
+  if (!Number.isInteger(id_usuario) && !loginFallido) {
     return res.status(400).json({ error: 'id_usuario es requerido y debe ser entero', code: 'DATOS_INVALIDOS' });
   }
   if (!LogAuditoria.TIPOS_ACCION.includes(tipo_accion)) {

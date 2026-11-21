@@ -193,6 +193,9 @@ export default function TabAudiencias({ usuario, esAdmin, distritos, salas, nomb
                 <Btn size="sm" variant="outline" onClick={()=>abrir("editar", detalle)}>✏️ Editar</Btn>
                 <Btn size="sm" variant="outline" style={{color:C.red,borderColor:C.red}} onClick={()=>abrir("cancelar", detalle)}>⛔ Cancelar/Suspender</Btn>
               </>}
+              <Btn size="sm" variant="outline" onClick={()=>abrir("publicacion", detalle)}>
+                {detalle.reservada ? "🌐 Publicar" : "🔒 Reservar"}
+              </Btn>
             </div>
             <Btn variant="outline" size="sm" onClick={()=>setDetalle(null)}>Cerrar</Btn>
           </>}
@@ -217,6 +220,19 @@ export default function TabAudiencias({ usuario, esAdmin, distritos, salas, nomb
           onGuardado={(msg) => { cerrarModal(); mostrarExito(msg); recargar(); }}
         />
       )}
+
+      {modal === "publicacion" && objetivo && (
+        <ModalPublicacion
+          audiencia={objetivo}
+          onClose={cerrarModal}
+          onGuardado={(a, reservada) => {
+            cerrarModal();
+            setDetalle(a);
+            mostrarExito(reservada ? "La audiencia quedó reservada." : "La audiencia se publicó en la vista pública.");
+            recargar();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -229,9 +245,10 @@ function ModalAudiencia({ audiencia, salas, autoridades, fechaInicial, onClose, 
     id_sala: String(audiencia.id_sala), id_juez: String(audiencia.id_juez), id_fiscal: String(audiencia.id_fiscal),
     defensor: audiencia.defensor ?? "", fecha: audiencia.fecha,
     hora_inicio: hhmm(audiencia.hora_inicio), hora_fin: hhmm(audiencia.hora_fin), estado: audiencia.estado,
+    reservada: Boolean(audiencia.reservada),
   } : {
     cuij:"", caratula:"", tipo_audiencia:"", id_sala:"", id_juez:"", id_fiscal:"", defensor:"",
-    fecha: fechaInicial, hora_inicio:"", hora_fin:"", estado:"EN_HORARIO",
+    fecha: fechaInicial, hora_inicio:"", hora_fin:"", estado:"EN_HORARIO", reservada:true,
   });
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -269,6 +286,7 @@ function ModalAudiencia({ audiencia, salas, autoridades, fechaInicial, onClose, 
       id_sala: Number(form.id_sala), id_juez: Number(form.id_juez), id_fiscal: Number(form.id_fiscal),
       defensor: form.defensor.trim() || null, fecha: form.fecha,
       hora_inicio: form.hora_inicio, hora_fin: form.hora_fin,
+      reservada: form.reservada,
     };
     try {
       if (esNueva) {
@@ -311,6 +329,15 @@ function ModalAudiencia({ audiencia, salas, autoridades, fechaInicial, onClose, 
         <Select label="Fiscal" value={form.id_fiscal} onChange={v=>set("id_fiscal", v)} required disabled={!sala}
           placeholder={sala ? "— Seleccionar —" : "— Elegí primero la sala —"} options={opcionesAutoridad("FISCAL", form.id_fiscal)} />
         <Input label="Defensor (opcional)" value={form.defensor} onChange={v=>set("defensor", v)} placeholder="Dr./Dra. Apellido, Nombre" style={{ gridColumn:"1/-1" }} />
+        {esNueva && (
+          <label style={{ gridColumn:"1/-1", display:"flex", alignItems:"flex-start", gap:9, color:C.text, fontSize:13, lineHeight:1.45 }}>
+            <input type="checkbox" checked={form.reservada} onChange={e=>set("reservada", e.target.checked)} style={{ marginTop:3 }} />
+            <span>
+              <strong>Mantener esta causa reservada</strong>
+              <span style={{ display:"block", color:C.muted, fontSize:12 }}>Si se desmarca, la carátula y los datos de agenda serán visibles públicamente. Las salas GESELL permanecen anonimizadas.</span>
+            </span>
+          </label>
+        )}
         {!esNueva && (
           <Select label="Estado" value={form.estado} onChange={v=>set("estado", v)} placeholder={null}
             options={ESTADOS_EDITABLES.map(e => ({ value:e, label:e.replace(/_/g," ") }))} />
@@ -363,6 +390,44 @@ function ModalCancelarSuspender({ audiencia, onClose, onGuardado }) {
       <div className="acciones-modal">
         <Btn variant="outline" onClick={onClose}>Volver</Btn>
         <Btn variant="danger" onClick={confirmar} disabled={guardando}>Confirmar {accion.toLowerCase()}</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function ModalPublicacion({ audiencia, onClose, onGuardado }) {
+  const reservada = !audiencia.reservada;
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  async function confirmar() {
+    setGuardando(true);
+    setError("");
+    try {
+      const resultado = await sgpa.cambiarPublicacion(audiencia.id_audiencia, reservada);
+      onGuardado(resultado.data, reservada);
+    } catch (e) {
+      setError(mensajeError(e));
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal title={reservada ? "Reservar audiencia" : "Publicar audiencia"} onClose={onClose} width={480}>
+      {error && <Alert type="error">{error}</Alert>}
+      <p style={{ fontSize:14, color:C.text, lineHeight:1.55 }}>
+        {reservada
+          ? "La carátula se reemplazará por “Causa reservada” en la vista pública y no se anunciará la disponibilidad de video."
+          : "La carátula y los datos de agenda quedarán visibles en la vista pública. Los motivos de cambio y los datos del usuario que cargó la audiencia seguirán ocultos; el video solo estará disponible mediante un enlace autenticado de corta duración."}
+      </p>
+      {audiencia.sala?.tipo === "GESELL" && (
+        <Alert type="info">Las audiencias de salas GESELL permanecen anonimizadas y sin video en la vista pública, aunque se quite la reserva.</Alert>
+      )}
+      <div className="acciones-modal">
+        <Btn variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Btn>
+        <Btn variant={reservada ? "danger" : "primary"} onClick={confirmar} disabled={guardando}>
+          {guardando ? "Guardando…" : reservada ? "Confirmar reserva" : "Confirmar publicación"}
+        </Btn>
       </div>
     </Modal>
   );

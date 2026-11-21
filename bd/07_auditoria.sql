@@ -11,14 +11,15 @@ CREATE TYPE tipo_accion_log AS ENUM (
     'MODIFICACION',
     'BAJA',
     'LOGIN',
-    'LOGOUT'
+    'LOGOUT',
+    'LOGIN_FALLIDO'
 );
 
 CREATE TABLE IF NOT EXISTS LOG_AUDITORIA (
     id_log      SERIAL           PRIMARY KEY,
 
     -- Referencia lógica al usuario (validada por el ms antes de insertar)
-    id_usuario  INT              NOT NULL,     -- → sgpa_usuarios.USUARIO
+    id_usuario  INT,                           -- NULL para intentos sin usuario identificado
 
     tipo_accion tipo_accion_log  NOT NULL,
     entidad     VARCHAR(50)      NOT NULL,     -- nombre de la tabla afectada, ej: 'AUDIENCIA'

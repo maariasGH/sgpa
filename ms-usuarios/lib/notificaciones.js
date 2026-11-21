@@ -2,7 +2,10 @@
 // Nodemailer/SMTP) por su endpoint interno POST /autoridades/notificaciones/email.
 // Fire-and-forget: si falla, el alta o la baja ya quedaron hechas y solo se registra el error.
 
+const { fetchT } = require('./http');
+
 const MS_AUTORIDADES_URL = process.env.MS_AUTORIDADES_URL || 'http://localhost:3003';
+const headersInternos    = { 'x-internal-key': process.env.INTERNAL_API_KEY };
 const SOPORTE     = process.env.SOPORTE_EMAIL?.trim() || null;
 const RESPONDER_A = process.env.SMTP_REPLY_TO?.trim() || null;
 
@@ -11,9 +14,9 @@ const fechaHoy = () => new Date().toLocaleDateString('es-AR', {
 });
 
 const enviarEmail = (to, asunto, mensaje) => {
-  fetch(`${MS_AUTORIDADES_URL}/autoridades/notificaciones/email`, {
+  fetchT(`${MS_AUTORIDADES_URL}/autoridades/notificaciones/email`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headersInternos },
     body:    JSON.stringify({ to, asunto, mensaje }),
   })
     .then(resp => { if (!resp.ok) throw new Error(`ms-autoridades respondió ${resp.status}`); })
@@ -38,8 +41,7 @@ const PIE =
 
 const distrito = (nombre) => nombre ?? 'No especificado';
 
-// La contraseña nunca se envía por correo: la entrega el administrador
-const notificarAlta = (usuario, nombreDistrito) => enviarEmail(
+const notificarAlta = (usuario, nombreDistrito, passwordTemporal) => enviarEmail(
   usuario.email,
   'SGPA — Alta de tu cuenta de operador',
   `Hola ${usuario.nombre}:\n\n` +
@@ -50,8 +52,10 @@ const notificarAlta = (usuario, nombreDistrito) => enviarEmail(
   `· Rol: Operador\n` +
   `· Distrito: ${distrito(nombreDistrito)}\n` +
   `· Fecha de alta: ${fechaHoy()}\n\n` +
+  `· Contraseña temporal: ${passwordTemporal}\n\n` +
   `Desde tu cuenta vas a poder programar y gestionar las audiencias y autoridades de tu distrito.\n\n` +
-  `Por seguridad, la contraseña no se envía por correo: te la entrega el administrador del sistema.\n\n` +
+  `Por seguridad, al iniciar sesión por primera vez el sistema te va a pedir que elijas una contraseña nueva. ` +
+  `La contraseña temporal dejará de funcionar después de ese cambio.\n\n` +
   `Si no esperabas este correo, avisanos.\n\n` +
   PIE,
 );

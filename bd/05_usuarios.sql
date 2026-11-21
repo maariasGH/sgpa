@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS USUARIO (
     id_usuario    SERIAL        PRIMARY KEY,
     username      VARCHAR(100)  NOT NULL UNIQUE,
     password_hash VARCHAR(255)  NOT NULL,
+    debe_cambiar_password BOOLEAN NOT NULL DEFAULT FALSE,
     nombre        VARCHAR(200)  NOT NULL,
     dni           INT           NOT NULL UNIQUE,
     email         VARCHAR(200)  NOT NULL UNIQUE,
